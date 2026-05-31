@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno>]
 EOF
 }
 
@@ -66,15 +66,26 @@ check_flutter() {
   fi
 }
 
+check_deno() {
+  if command -v deno >/dev/null 2>&1; then
+    mrtk_log "deno=$(command -v deno)"
+    deno --version
+  else
+    mrtk_warn "deno not installed"
+  fi
+}
+
 check_os
 case "$TOOL" in
   all)
     check_nginx
     check_flutter
     check_mariadb
+    check_deno
     ;;
   nginx) check_nginx ;;
   flutter) check_flutter ;;
   mariadb) check_mariadb ;;
+  deno) check_deno ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

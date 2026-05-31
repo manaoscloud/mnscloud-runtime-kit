@@ -14,6 +14,69 @@ mrtk_install_packages() {
   fi
 }
 
+mrtk_install_deno_dependencies() {
+  mrtk_detect_os
+  mrtk_log "installing Deno installer dependencies"
+
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl unzip
+  else
+    dnf install -y ca-certificates curl unzip
+  fi
+}
+
+mrtk_deno_bin() {
+  local install_dir="${MNSCLOUD_DENO_INSTALL_DIR:-/usr/local/deno}"
+  printf '%s/bin/deno\n' "$install_dir"
+}
+
+mrtk_installed_deno_version() {
+  local deno_bin
+  deno_bin="$(mrtk_deno_bin)"
+
+  if [[ -x "$deno_bin" ]]; then
+    "$deno_bin" --version 2>/dev/null | awk '/^deno / {print $2; exit}'
+    return 0
+  fi
+
+  if command -v deno >/dev/null 2>&1; then
+    deno --version 2>/dev/null | awk '/^deno / {print $2; exit}'
+  fi
+}
+
+mrtk_install_or_update_deno() {
+  local version="${MNSCLOUD_DENO_VERSION:-2.8.1}"
+  local install_dir="${MNSCLOUD_DENO_INSTALL_DIR:-/usr/local/deno}"
+  local installed_version
+  installed_version="$(mrtk_installed_deno_version || true)"
+
+  if [[ "$installed_version" == "$version" ]]; then
+    mrtk_log "Deno ${version} already installed"
+    return 0
+  fi
+
+  mrtk_install_deno_dependencies
+  install -d -m 0755 "$install_dir" /usr/local/bin
+
+  mrtk_log "installing Deno ${version} with official deno.land installer"
+  CI=1 DENO_INSTALL="$install_dir" sh -c \
+    "curl -fsSL https://deno.land/install.sh | sh -s -- --no-modify-path v${version}"
+
+  ln -sfn "${install_dir}/bin/deno" /usr/local/bin/deno
+  ln -sfn "${install_dir}/bin/deno" /usr/bin/deno 2>/dev/null || true
+
+  installed_version="$(mrtk_installed_deno_version || true)"
+  [[ "$installed_version" == "$version" ]] ||
+    mrtk_die "expected Deno ${version} after installation, got ${installed_version:-not installed}"
+  mrtk_log "Deno ${version} installed"
+}
+
+mrtk_ensure_deno() {
+  mrtk_install_or_update_deno
+  command -v deno >/dev/null 2>&1 || mrtk_die "Deno installation failed"
+}
+
 mrtk_install_nginx_org_repository() {
   mrtk_detect_os
 
