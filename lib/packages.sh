@@ -203,7 +203,7 @@ mrtk_require_installed_mariadb_version() {
 
 mrtk_install_mariadb_package() {
   local version="${MNSCLOUD_MARIADB_VERSION:-12.3}"
-  if command -v mariadbd >/dev/null 2>&1 || command -v mariadb >/dev/null 2>&1; then
+  if command -v mariadbd >/dev/null 2>&1; then
     mrtk_require_installed_mariadb_version
     mrtk_log "MariaDB ${version}.x already installed"
     return 0
