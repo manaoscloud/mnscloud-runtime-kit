@@ -35,12 +35,15 @@ Current installers:
 - `flutter`: installs Flutter build dependencies from the OS package manager, clones/updates the
   Flutter SDK from the official Flutter GitHub repository, and exposes `flutter` and `dart`.
   The default build profile is `web`, which keeps server dependencies lean for static web bundles.
+- `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
+  MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
 
 ## Install A Tool
 
 ```bash
 sudo ./scripts/install-tool.sh --tool nginx
 sudo ./scripts/install-tool.sh --tool flutter
+sudo MNSCLOUD_MARIADB_VERSION=12.3 ./scripts/install-tool.sh --tool mariadb
 ```
 
 For hosts that also need Linux desktop builds, use:
@@ -61,6 +64,7 @@ sudo MNSCLOUD_FLUTTER_RUN_USER=mnscloud-webapps ./scripts/install-tool.sh --tool
 sudo ./scripts/doctor.sh
 sudo ./scripts/doctor.sh --tool nginx
 sudo ./scripts/doctor.sh --tool flutter
+sudo ./scripts/doctor.sh --tool mariadb
 ```
 
 ## Runtime Pinning

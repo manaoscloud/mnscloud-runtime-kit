@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
   cat <<EOF
-Usage: scripts/install-tool.sh --tool <nginx|flutter>
+Usage: scripts/install-tool.sh --tool <nginx|flutter|mariadb>
 EOF
 }
 
@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TOOL" in
-  nginx|flutter)
+  nginx|flutter|mariadb)
     exec "${ROOT_DIR}/installers/${TOOL}.sh"
     ;;
   "")
@@ -34,4 +34,3 @@ case "$TOOL" in
     exit 1
     ;;
 esac
-

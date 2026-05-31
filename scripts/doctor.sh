@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb>]
 EOF
 }
 
@@ -35,6 +35,22 @@ check_nginx() {
   fi
 }
 
+check_mariadb() {
+  if command -v mariadb >/dev/null 2>&1; then
+    mrtk_log "mariadb=$(command -v mariadb)"
+    mariadb --version
+  else
+    mrtk_warn "mariadb client not installed"
+  fi
+
+  if command -v mariadbd >/dev/null 2>&1; then
+    mrtk_log "mariadbd=$(command -v mariadbd)"
+    mariadbd --version
+  else
+    mrtk_warn "mariadbd server not installed"
+  fi
+}
+
 check_flutter() {
   if command -v flutter >/dev/null 2>&1; then
     mrtk_log "flutter=$(command -v flutter)"
@@ -55,9 +71,10 @@ case "$TOOL" in
   all)
     check_nginx
     check_flutter
+    check_mariadb
     ;;
   nginx) check_nginx ;;
   flutter) check_flutter ;;
+  mariadb) check_mariadb ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac
-
