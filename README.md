@@ -34,12 +34,19 @@ Current installers:
 - `nginx`: configures the official stable `nginx.org` repository and installs `nginx`.
 - `flutter`: installs Flutter build dependencies from the OS package manager, clones/updates the
   Flutter SDK from the official Flutter GitHub repository, and exposes `flutter` and `dart`.
+  The default build profile is `web`, which keeps server dependencies lean for static web bundles.
 
 ## Install A Tool
 
 ```bash
 sudo ./scripts/install-tool.sh --tool nginx
 sudo ./scripts/install-tool.sh --tool flutter
+```
+
+For hosts that also need Linux desktop builds, use:
+
+```bash
+sudo MNSCLOUD_FLUTTER_BUILD_PROFILE=linux ./scripts/install-tool.sh --tool flutter
 ```
 
 ## Doctor
@@ -62,4 +69,3 @@ MNSCLOUD_RUNTIME_KIT_REF=v1.0.0
 ```
 
 Use `main` only for development environments.
-

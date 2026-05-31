@@ -91,17 +91,26 @@ mrtk_disable_default_nginx_service() {
 
 mrtk_install_flutter_dependencies() {
   mrtk_detect_os
-  mrtk_log "installing Flutter build dependencies"
+  local build_profile="${MNSCLOUD_FLUTTER_BUILD_PROFILE:-web}"
+  mrtk_log "installing Flutter ${build_profile} build dependencies"
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
     apt-get update -y
-    apt-get install -y --no-install-recommends \
-      ca-certificates clang cmake curl git libgtk-3-dev liblzma-dev ninja-build \
-      pkg-config unzip xz-utils zip
+    if [[ "$build_profile" == "web" ]]; then
+      apt-get install -y --no-install-recommends ca-certificates curl git unzip xz-utils zip
+    else
+      apt-get install -y --no-install-recommends \
+        ca-certificates clang cmake curl git libgtk-3-dev liblzma-dev ninja-build \
+        pkg-config unzip xz-utils zip
+    fi
   else
-    dnf install -y \
-      ca-certificates clang cmake curl git gtk3-devel libstdc++-devel ninja-build \
-      pkgconf-pkg-config unzip xz zip
+    if [[ "$build_profile" == "web" ]]; then
+      dnf install -y ca-certificates curl git unzip xz zip
+    else
+      dnf install -y \
+        ca-certificates clang cmake curl git gtk3-devel libstdc++-devel ninja-build \
+        pkgconf-pkg-config unzip xz zip
+    fi
   fi
 }
 
@@ -112,6 +121,7 @@ mrtk_install_or_update_flutter() {
   local precache_web="${MNSCLOUD_FLUTTER_PRECACHE_WEB:-true}"
 
   mrtk_install_flutter_dependencies
+  export FLUTTER_ALLOW_ROOT="${FLUTTER_ALLOW_ROOT:-true}"
 
   if [[ -d "${flutter_dir}/.git" ]]; then
     mrtk_log "updating Flutter SDK in ${flutter_dir}"
@@ -143,4 +153,3 @@ mrtk_ensure_flutter() {
   mrtk_install_or_update_flutter
   command -v flutter >/dev/null 2>&1 || mrtk_die "Flutter installation failed"
 }
-
