@@ -49,6 +49,12 @@ For hosts that also need Linux desktop builds, use:
 sudo MNSCLOUD_FLUTTER_BUILD_PROFILE=linux ./scripts/install-tool.sh --tool flutter
 ```
 
+To avoid running Flutter itself as root from a root installer, provide an existing service user:
+
+```bash
+sudo MNSCLOUD_FLUTTER_RUN_USER=mnscloud-webapps ./scripts/install-tool.sh --tool flutter
+```
+
 ## Doctor
 
 ```bash

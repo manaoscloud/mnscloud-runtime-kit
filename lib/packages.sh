@@ -114,6 +114,36 @@ mrtk_install_flutter_dependencies() {
   fi
 }
 
+mrtk_prepare_flutter_runner() {
+  local flutter_dir="$1"
+  local run_user="${MNSCLOUD_FLUTTER_RUN_USER:-}"
+  local flutter_home="${MNSCLOUD_FLUTTER_HOME:-/var/lib/mnscloud-runtime-kit/flutter}"
+
+  [[ -n "$run_user" ]] || return 0
+  id -u "$run_user" >/dev/null 2>&1 || mrtk_die "Flutter run user does not exist: $run_user"
+
+  local run_group
+  run_group="$(id -gn "$run_user")"
+  install -d -m 0750 -o "$run_user" -g "$run_group" "$flutter_home"
+  chown -R "$run_user:$run_group" "$flutter_dir" "$flutter_home"
+}
+
+mrtk_flutter_cmd() {
+  local run_user="${MNSCLOUD_FLUTTER_RUN_USER:-}"
+  local flutter_home="${MNSCLOUD_FLUTTER_HOME:-/var/lib/mnscloud-runtime-kit/flutter}"
+  local flutter_dir="${MNSCLOUD_FLUTTER_DIR:-/opt/flutter}"
+
+  if [[ -n "$run_user" ]]; then
+    runuser -u "$run_user" -- env \
+      HOME="$flutter_home" \
+      PUB_CACHE="${flutter_home}/.pub-cache" \
+      PATH="${flutter_dir}/bin:${PATH}" \
+      "$@"
+  else
+    "$@"
+  fi
+}
+
 mrtk_install_or_update_flutter() {
   local flutter_dir="${MNSCLOUD_FLUTTER_DIR:-/opt/flutter}"
   local flutter_channel="${MNSCLOUD_FLUTTER_CHANNEL:-stable}"
@@ -121,7 +151,6 @@ mrtk_install_or_update_flutter() {
   local precache_web="${MNSCLOUD_FLUTTER_PRECACHE_WEB:-true}"
 
   mrtk_install_flutter_dependencies
-  export FLUTTER_ALLOW_ROOT="${FLUTTER_ALLOW_ROOT:-true}"
 
   if [[ -d "${flutter_dir}/.git" ]]; then
     mrtk_log "updating Flutter SDK in ${flutter_dir}"
@@ -136,12 +165,13 @@ mrtk_install_or_update_flutter() {
 
   ln -sfn "${flutter_dir}/bin/flutter" /usr/local/bin/flutter
   ln -sfn "${flutter_dir}/bin/dart" /usr/local/bin/dart
+  mrtk_prepare_flutter_runner "$flutter_dir"
 
-  "${flutter_dir}/bin/flutter" config --no-analytics
+  mrtk_flutter_cmd "${flutter_dir}/bin/flutter" config --no-analytics
   if [[ "$precache_web" == "true" ]]; then
-    "${flutter_dir}/bin/flutter" precache --web
+    mrtk_flutter_cmd "${flutter_dir}/bin/flutter" precache --web
   fi
-  "${flutter_dir}/bin/flutter" --version
+  mrtk_flutter_cmd "${flutter_dir}/bin/flutter" --version
 }
 
 mrtk_ensure_flutter() {
