@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "product": "mnscloud-runtime-kit",
+  "repository": "manaoscloud/mnscloud-runtime-kit",
+  "releasePolicy": {
+    "productionRefSource": "git-tag",
+    "developmentRef": "main",
+    "versionFile": "VERSION",
+    "consumerPinning": "MNSCLOUD_RUNTIME_KIT_REF or module-specific *_RUNTIME_KIT_REF"
+  },
+  "channels": {
+    "stable": {
+      "version": "0.1.6",
+      "ref": "v0.1.6",
+      "minimumVersion": "0.1.5",
+      "releasedAt": "2026-05-31T19:15:37Z"
+    },
+    "candidate": {
+      "version": "0.1.6",
+      "ref": "v0.1.6",
+      "minimumVersion": "0.1.5",
+      "releasedAt": "2026-05-31T19:15:37Z"
+    }
+  }
+}

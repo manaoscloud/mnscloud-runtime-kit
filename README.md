@@ -83,3 +83,35 @@ MNSCLOUD_RUNTIME_KIT_REF=v1.0.0
 ```
 
 Use `main` only for development environments.
+
+## Release Discovery Contract
+
+Canonical release metadata lives in [`releases/manifest.json`](./releases/manifest.json).
+
+MNSCloud modules and automation must use this contract:
+
+- Treat `main` as development only.
+- Treat `channels.<channel>.ref` as the production runtime-kit target.
+- Pin consumers with `MNSCLOUD_RUNTIME_KIT_REF` or their module-specific
+  variable, such as `API_RUNTIME_KIT_REF`, `APP_RUNTIME_KIT_REF`,
+  `DB_RUNTIME_KIT_REF`, or `AGENT_RUNTIME_KIT_REF`.
+- Update a consumer only after the matching runtime-kit Git tag has been pushed.
+- Keep module-specific service configuration and business behavior in the
+  consumer repository.
+
+## Maintainer Release Flow
+
+Only maintainers should publish production runtime-kit releases:
+
+```bash
+cd /opt/mnscloud/mnscloud-runtime-kit
+scripts/release-runtime-kit.sh --version 0.1.7 --channel stable
+git push origin main
+git push origin v0.1.7
+gh release create v0.1.7 --title "mnscloud-runtime-kit v0.1.7" --generate-notes
+```
+
+AI coding agents must follow the same flow: update installer code, validate,
+update `VERSION` and `releases/manifest.json`, commit, tag, push `main`, and
+push the tag. Do not update consumers to a runtime-kit ref until that tag exists
+on GitHub.

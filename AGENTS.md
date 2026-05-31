@@ -21,3 +21,14 @@ Runtime installer repository for common MNSCloud infrastructure dependencies.
 - Commit and push completed changes.
 - Keep public contribution governance files current.
 
+## Release Workflow For Maintainers And AI Agents
+
+- Production runtime-kit consumption is Git tag based.
+- `main` is development/integration only.
+- `VERSION` must match the intended semantic version without `v`.
+- `releases/manifest.json` is the canonical update-discovery source for
+  modules and automation.
+- Publish a release by validating, committing, tagging `vX.Y.Z`, pushing
+  `main`, and pushing the tag.
+- Never update a consumer repo to a runtime-kit version until the matching tag
+  exists on GitHub.

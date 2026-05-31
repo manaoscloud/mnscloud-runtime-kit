@@ -14,6 +14,12 @@ MNSCloud service modules.
   change.
 - When adding or changing an installer, update `README.md`, `config/manifests/stable.env`, and CI
   syntax validation.
+- Production consumers must pin Git tags. `main` is development-only.
+- `VERSION` and `releases/manifest.json` are the release-discovery contract.
+- Do not update consumers to a runtime-kit ref until the matching tag has been
+  pushed to GitHub.
+- Use `scripts/release-runtime-kit.sh --version X.Y.Z --channel stable` to
+  prepare a release.
 
 ## Validation
 
@@ -21,4 +27,3 @@ MNSCloud service modules.
 bash -n scripts/*.sh lib/*.sh installers/*.sh
 ./scripts/doctor.sh --help
 ```
-
