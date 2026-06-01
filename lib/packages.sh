@@ -146,6 +146,142 @@ mrtk_install_nginx_package() {
   command -v nginx >/dev/null 2>&1 || mrtk_die "nginx installation failed"
 }
 
+mrtk_node_major_version() {
+  if ! command -v node >/dev/null 2>&1; then
+    printf '0\n'
+    return 0
+  fi
+
+  node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || printf '0\n'
+}
+
+mrtk_nodejs_is_usable() {
+  local expected_major="${MNSCLOUD_NODE_MAJOR_VERSION:-24}"
+  local installed_major
+  installed_major="$(mrtk_node_major_version)"
+  [[ "$installed_major" -ge "$expected_major" ]] && command -v npm >/dev/null 2>&1
+}
+
+mrtk_install_nodesource_repository() {
+  mrtk_detect_os
+  local major="${MNSCLOUD_NODE_MAJOR_VERSION:-24}"
+
+  mrtk_log "configuring official NodeSource repository for Node.js ${major}.x"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    curl -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
+  else
+    dnf install -y ca-certificates curl
+    curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
+  fi
+}
+
+mrtk_install_nodejs_package() {
+  local major="${MNSCLOUD_NODE_MAJOR_VERSION:-24}"
+
+  if mrtk_nodejs_is_usable; then
+    mrtk_log "Node.js $(node -v) and npm $(npm -v) already installed"
+    return 0
+  fi
+
+  mrtk_install_nodesource_repository
+  mrtk_detect_os
+  mrtk_log "installing Node.js ${major}.x from official NodeSource repository"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get install -y --no-install-recommends nodejs
+  else
+    dnf install -y nodejs
+  fi
+
+  mrtk_nodejs_is_usable ||
+    mrtk_die "expected Node.js ${major}.x with npm after installation"
+  mrtk_log "Node.js $(node -v) and npm $(npm -v) installed"
+}
+
+mrtk_ensure_nodejs() {
+  mrtk_install_nodejs_package
+  command -v node >/dev/null 2>&1 || mrtk_die "Node.js installation failed"
+  command -v npm >/dev/null 2>&1 || mrtk_die "npm installation failed"
+}
+
+mrtk_install_docker_repository() {
+  mrtk_detect_os
+  mrtk_log "configuring official Docker repository"
+
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+
+    install -m 0755 -d /etc/apt/keyrings
+    rm -f /etc/apt/keyrings/docker.gpg
+    curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+
+    local codename="${MRTK_OS_VERSION_CODENAME:-}"
+    if [[ -z "$codename" ]]; then
+      codename="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+    fi
+    [[ -n "$codename" ]] || mrtk_die "cannot determine Debian codename for Docker repository"
+
+    cat > /etc/apt/sources.list.d/docker.list <<EOF
+deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian ${codename} stable
+EOF
+  else
+    dnf install -y dnf-plugins-core ca-certificates curl
+
+    local os_major="${MRTK_OS_VERSION_ID%%.*}"
+    local repo_url="https://download.docker.com/linux/rhel/docker-ce.repo"
+    if [[ "$MRTK_OS_ID" == "rocky" || "$MRTK_OS_ID" == "almalinux" ]]; then
+      repo_url="https://download.docker.com/linux/centos/docker-ce.repo"
+      if [[ "$os_major" == "10" ]]; then
+        repo_url="https://download.docker.com/linux/rhel/docker-ce.repo"
+      fi
+    fi
+
+    if dnf config-manager --help 2>&1 | grep -q -- '--add-repo'; then
+      dnf config-manager --add-repo "$repo_url"
+    else
+      dnf config-manager addrepo --from-repofile="$repo_url"
+    fi
+  fi
+}
+
+mrtk_docker_is_usable() {
+  command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
+}
+
+mrtk_install_docker_package() {
+  if mrtk_docker_is_usable; then
+    mrtk_log "Docker already installed: $(docker --version); $(docker compose version)"
+    return 0
+  fi
+
+  mrtk_install_docker_repository
+  mrtk_detect_os
+  mrtk_log "installing Docker Engine and Compose plugin from official Docker repository"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  else
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable docker
+    systemctl start docker
+  fi
+
+  mrtk_docker_is_usable || mrtk_die "Docker Engine with Compose plugin is required"
+  mrtk_log "Docker installed: $(docker --version); $(docker compose version)"
+}
+
+mrtk_ensure_docker() {
+  mrtk_install_docker_package
+  mrtk_docker_is_usable || mrtk_die "Docker Engine with Compose plugin is required"
+}
+
 mrtk_version_series() {
   local value="$1"
   if [[ "$value" =~ (^|[^0-9])([0-9]+)\.([0-9]+)([^0-9]|$) ]]; then

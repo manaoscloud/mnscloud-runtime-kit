@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker>]
 EOF
 }
 
@@ -75,6 +75,32 @@ check_deno() {
   fi
 }
 
+check_nodejs() {
+  if command -v node >/dev/null 2>&1; then
+    mrtk_log "node=$(command -v node)"
+    node --version
+  else
+    mrtk_warn "node not installed"
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    mrtk_log "npm=$(command -v npm)"
+    npm --version
+  else
+    mrtk_warn "npm not installed"
+  fi
+}
+
+check_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    mrtk_log "docker=$(command -v docker)"
+    docker --version
+    docker compose version || mrtk_warn "docker compose plugin not available"
+  else
+    mrtk_warn "docker not installed"
+  fi
+}
+
 check_os
 case "$TOOL" in
   all)
@@ -82,10 +108,14 @@ case "$TOOL" in
     check_flutter
     check_mariadb
     check_deno
+    check_nodejs
+    check_docker
     ;;
   nginx) check_nginx ;;
   flutter) check_flutter ;;
   mariadb) check_mariadb ;;
   deno) check_deno ;;
+  nodejs) check_nodejs ;;
+  docker) check_docker ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

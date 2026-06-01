@@ -19,9 +19,9 @@ service configuration and business behavior.
 
 ## Boundary
 
-This kit may install shared runtimes such as Nginx, Flutter, Deno, and MariaDB. It must not contain
-customer data, production domains, private topology, API secrets, billing rules, tenant policy, PABX
-credentials, or module-specific application configuration.
+This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, and MariaDB. It
+must not contain customer data, production domains, private topology, API secrets, billing rules,
+tenant policy, PABX credentials, or module-specific application configuration.
 
 Modules consume this kit for the question: "How do we install runtime X safely on this OS?"
 
@@ -37,6 +37,10 @@ Current installers:
   The default build profile is `web`, which keeps server dependencies lean for static web bundles.
 - `deno`: installs the pinned Deno runtime version with the official `deno.land` installer and
   exposes `deno` in `/usr/local/bin`.
+- `nodejs`: configures the official NodeSource repository for `MNSCLOUD_NODE_MAJOR_VERSION` and
+  installs Node.js with npm.
+- `docker`: configures the official Docker repository and installs Docker Engine plus the Compose
+  plugin.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
   MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
 
@@ -46,6 +50,8 @@ Current installers:
 sudo ./scripts/install-tool.sh --tool nginx
 sudo ./scripts/install-tool.sh --tool flutter
 sudo MNSCLOUD_DENO_VERSION=2.8.1 ./scripts/install-tool.sh --tool deno
+sudo MNSCLOUD_NODE_MAJOR_VERSION=24 ./scripts/install-tool.sh --tool nodejs
+sudo ./scripts/install-tool.sh --tool docker
 sudo MNSCLOUD_MARIADB_VERSION=12.3 ./scripts/install-tool.sh --tool mariadb
 ```
 
@@ -68,6 +74,8 @@ sudo ./scripts/doctor.sh
 sudo ./scripts/doctor.sh --tool nginx
 sudo ./scripts/doctor.sh --tool flutter
 sudo ./scripts/doctor.sh --tool deno
+sudo ./scripts/doctor.sh --tool nodejs
+sudo ./scripts/doctor.sh --tool docker
 sudo ./scripts/doctor.sh --tool mariadb
 ```
 
