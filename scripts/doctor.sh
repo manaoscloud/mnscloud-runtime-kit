@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|basic-auth-utils>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|basic-auth-utils>]
 EOF
 }
 
@@ -110,6 +110,22 @@ check_certbot() {
   fi
 }
 
+check_rabbitmq() {
+  if command -v erl >/dev/null 2>&1; then
+    mrtk_log "erl=$(command -v erl)"
+    erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
+  else
+    mrtk_warn "Erlang not installed"
+  fi
+
+  if command -v rabbitmq-server >/dev/null 2>&1; then
+    mrtk_log "rabbitmq-server=$(command -v rabbitmq-server)"
+    rabbitmq-diagnostics --version 2>/dev/null || rabbitmqctl version 2>/dev/null || true
+  else
+    mrtk_warn "RabbitMQ server not installed"
+  fi
+}
+
 check_basic_auth_utils() {
   if command -v htpasswd >/dev/null 2>&1; then
     mrtk_log "htpasswd=$(command -v htpasswd)"
@@ -129,6 +145,7 @@ case "$TOOL" in
     check_nodejs
     check_docker
     check_certbot
+    check_rabbitmq
     check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
@@ -138,6 +155,7 @@ case "$TOOL" in
   nodejs) check_nodejs ;;
   docker) check_docker ;;
   certbot) check_certbot ;;
+  rabbitmq) check_rabbitmq ;;
   basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

@@ -388,6 +388,186 @@ mrtk_ensure_certbot() {
   mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
 }
 
+mrtk_detect_rabbitmq_os() {
+  [[ -r /etc/os-release ]] || mrtk_die "/etc/os-release not found"
+  # shellcheck disable=SC1091
+  source /etc/os-release
+
+  MRTK_RABBITMQ_OS_ID="${ID:-}"
+  MRTK_RABBITMQ_OS_VERSION_ID="${VERSION_ID:-}"
+  MRTK_RABBITMQ_OS_MAJOR="${MRTK_RABBITMQ_OS_VERSION_ID%%.*}"
+  MRTK_RABBITMQ_OS_CODENAME="${VERSION_CODENAME:-}"
+  MRTK_RABBITMQ_OS_PRETTY_NAME="${PRETTY_NAME:-${MRTK_RABBITMQ_OS_ID} ${MRTK_RABBITMQ_OS_VERSION_ID}}"
+
+  case "${MRTK_RABBITMQ_OS_ID}:${MRTK_RABBITMQ_OS_MAJOR}" in
+    debian:12)
+      MRTK_RABBITMQ_OS_FAMILY="debian"
+      MRTK_RABBITMQ_DEBIAN_CODENAME="${MRTK_RABBITMQ_OS_CODENAME:-bookworm}"
+      ;;
+    debian:13)
+      MRTK_RABBITMQ_OS_FAMILY="debian"
+      MRTK_RABBITMQ_DEBIAN_CODENAME="${MRTK_RABBITMQ_OS_CODENAME:-trixie}"
+      ;;
+    rhel:8|rhel:9|rocky:8|rocky:9|almalinux:8|almalinux:9)
+      MRTK_RABBITMQ_OS_FAMILY="rhel"
+      ;;
+    *)
+      mrtk_die "unsupported RabbitMQ OS: ${MRTK_RABBITMQ_OS_PRETTY_NAME}. Supported: Debian 12/13 and RHEL/Rocky/AlmaLinux 8/9"
+      ;;
+  esac
+
+  export MRTK_RABBITMQ_OS_ID MRTK_RABBITMQ_OS_VERSION_ID MRTK_RABBITMQ_OS_MAJOR
+  export MRTK_RABBITMQ_OS_CODENAME MRTK_RABBITMQ_OS_PRETTY_NAME MRTK_RABBITMQ_OS_FAMILY
+  export MRTK_RABBITMQ_DEBIAN_CODENAME
+}
+
+mrtk_rabbitmq_debian_erlang_packages() {
+  cat <<'EOF'
+erlang-base
+erlang-asn1
+erlang-crypto
+erlang-eldap
+erlang-ftp
+erlang-inets
+erlang-mnesia
+erlang-os-mon
+erlang-parsetools
+erlang-public-key
+erlang-runtime-tools
+erlang-snmp
+erlang-ssl
+erlang-syntax-tools
+erlang-tftp
+erlang-tools
+erlang-xmerl
+EOF
+}
+
+mrtk_configure_rabbitmq_debian_repository() {
+  mrtk_detect_rabbitmq_os
+  [[ "$MRTK_RABBITMQ_OS_FAMILY" == "debian" ]] ||
+    mrtk_die "RabbitMQ Debian repository requested on non-Debian host"
+
+  local apt_options=()
+  mapfile -t apt_options < <(mrtk_apt_options)
+
+  mrtk_log "configuring official Team RabbitMQ apt repositories for ${MRTK_RABBITMQ_DEBIAN_CODENAME}"
+  apt-get "${apt_options[@]}" update
+  apt-get "${apt_options[@]}" install -y --no-install-recommends \
+    curl ca-certificates gnupg apt-transport-https
+
+  install -d -m 0755 /etc/apt/keyrings
+  rm -f /etc/apt/keyrings/com.rabbitmq.team.gpg /etc/apt/keyrings/rabbitmq-release-signing-key.gpg
+  curl -1sLf 'https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA' \
+    | gpg --dearmor > /etc/apt/keyrings/com.rabbitmq.team.gpg
+  curl -1sLf 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc' \
+    | gpg --dearmor > /etc/apt/keyrings/rabbitmq-release-signing-key.gpg
+
+  cat > /etc/apt/sources.list.d/rabbitmq.list <<EOF
+deb [arch=amd64 signed-by=/etc/apt/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/debian/${MRTK_RABBITMQ_DEBIAN_CODENAME} ${MRTK_RABBITMQ_DEBIAN_CODENAME} main
+deb [arch=amd64 signed-by=/etc/apt/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/debian/${MRTK_RABBITMQ_DEBIAN_CODENAME} ${MRTK_RABBITMQ_DEBIAN_CODENAME} main
+deb [arch=amd64 signed-by=/etc/apt/keyrings/rabbitmq-release-signing-key.gpg] https://deb1.rabbitmq.com/rabbitmq-server/debian/${MRTK_RABBITMQ_DEBIAN_CODENAME} ${MRTK_RABBITMQ_DEBIAN_CODENAME} main
+deb [arch=amd64 signed-by=/etc/apt/keyrings/rabbitmq-release-signing-key.gpg] https://deb2.rabbitmq.com/rabbitmq-server/debian/${MRTK_RABBITMQ_DEBIAN_CODENAME} ${MRTK_RABBITMQ_DEBIAN_CODENAME} main
+EOF
+
+  apt-get "${apt_options[@]}" update
+}
+
+mrtk_configure_rabbitmq_rhel_repository() {
+  mrtk_detect_rabbitmq_os
+  [[ "$MRTK_RABBITMQ_OS_FAMILY" == "rhel" ]] ||
+    mrtk_die "RabbitMQ RPM repository requested on non-RHEL-compatible host"
+
+  mrtk_log "configuring official RabbitMQ yum repositories"
+  dnf install -y curl ca-certificates yum-utils
+  cat > /etc/yum.repos.d/rabbitmq.repo <<'EOF'
+[modern-erlang]
+name=modern-erlang-el
+baseurl=https://yum1.rabbitmq.com/erlang/el/$releasever/$basearch
+        https://yum2.rabbitmq.com/erlang/el/$releasever/$basearch
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc
+       https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-erlang-release-signing-key.asc
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+metadata_expire=300
+pkg_gpgcheck=1
+autorefresh=1
+type=rpm-md
+
+[rabbitmq-server]
+name=rabbitmq-server-el
+baseurl=https://yum1.rabbitmq.com/rabbitmq/el/$releasever/$basearch
+        https://yum2.rabbitmq.com/rabbitmq/el/$releasever/$basearch
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+metadata_expire=300
+pkg_gpgcheck=1
+autorefresh=1
+type=rpm-md
+EOF
+}
+
+mrtk_configure_rabbitmq_repository() {
+  mrtk_detect_rabbitmq_os
+  if [[ "$MRTK_RABBITMQ_OS_FAMILY" == "debian" ]]; then
+    mrtk_configure_rabbitmq_debian_repository
+  else
+    mrtk_configure_rabbitmq_rhel_repository
+  fi
+}
+
+mrtk_install_rabbitmq_package() {
+  mrtk_configure_rabbitmq_repository
+  mrtk_detect_rabbitmq_os
+
+  mrtk_log "installing RabbitMQ and Erlang from official RabbitMQ repositories"
+  if [[ "$MRTK_RABBITMQ_OS_FAMILY" == "debian" ]]; then
+    local apt_options=()
+    local erlang_packages=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    mapfile -t erlang_packages < <(mrtk_rabbitmq_debian_erlang_packages)
+    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
+      "${erlang_packages[@]}" rabbitmq-server
+  else
+    dnf install -y erlang rabbitmq-server
+  fi
+
+  command -v erl >/dev/null 2>&1 || mrtk_die "Erlang installation failed"
+  command -v rabbitmq-server >/dev/null 2>&1 || mrtk_die "RabbitMQ server installation failed"
+  command -v rabbitmq-diagnostics >/dev/null 2>&1 || mrtk_die "RabbitMQ diagnostics CLI installation failed"
+}
+
+mrtk_update_rabbitmq_package() {
+  mrtk_configure_rabbitmq_repository
+  mrtk_detect_rabbitmq_os
+
+  mrtk_log "updating RabbitMQ and Erlang packages"
+  if [[ "$MRTK_RABBITMQ_OS_FAMILY" == "debian" ]]; then
+    local apt_options=()
+    local erlang_packages=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    mapfile -t erlang_packages < <(mrtk_rabbitmq_debian_erlang_packages)
+    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
+      "${erlang_packages[@]}" rabbitmq-server
+  else
+    dnf update -y erlang rabbitmq-server
+  fi
+
+  command -v erl >/dev/null 2>&1 || mrtk_die "Erlang installation failed"
+  command -v rabbitmq-server >/dev/null 2>&1 || mrtk_die "RabbitMQ server installation failed"
+}
+
+mrtk_ensure_rabbitmq() {
+  mrtk_install_rabbitmq_package
+}
+
 mrtk_version_series() {
   local value="$1"
   if [[ "$value" =~ (^|[^0-9])([0-9]+)\.([0-9]+)([^0-9]|$) ]]; then
