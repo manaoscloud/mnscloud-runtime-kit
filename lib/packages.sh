@@ -282,6 +282,117 @@ mrtk_ensure_docker() {
   mrtk_docker_is_usable || mrtk_die "Docker Engine with Compose plugin is required"
 }
 
+mrtk_install_basic_auth_utils() {
+  if command -v htpasswd >/dev/null 2>&1; then
+    mrtk_log "htpasswd already installed: $(command -v htpasswd)"
+    return 0
+  fi
+
+  mrtk_detect_os
+  mrtk_log "installing HTTP basic-auth utility package"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends apache2-utils
+  else
+    dnf install -y httpd-tools
+  fi
+
+  command -v htpasswd >/dev/null 2>&1 || mrtk_die "htpasswd installation failed"
+}
+
+mrtk_ensure_basic_auth_utils() {
+  mrtk_install_basic_auth_utils
+}
+
+mrtk_certbot_is_usable() {
+  command -v certbot >/dev/null 2>&1
+}
+
+mrtk_install_certbot_system_package() {
+  local nginx_plugin="${MNSCLOUD_CERTBOT_NGINX_PLUGIN:-true}"
+
+  if mrtk_certbot_is_usable; then
+    mrtk_log "certbot already installed: $(command -v certbot)"
+    return 0
+  fi
+
+  mrtk_detect_os
+  mrtk_log "installing Certbot from operating-system packages"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    if [[ "$nginx_plugin" == "true" ]]; then
+      apt-get install -y --no-install-recommends certbot python3-certbot-nginx
+    else
+      apt-get install -y --no-install-recommends certbot
+    fi
+  else
+    if [[ "$nginx_plugin" == "true" ]]; then
+      dnf install -y certbot python3-certbot-nginx || dnf install -y certbot
+    else
+      dnf install -y certbot
+    fi
+  fi
+
+  mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
+}
+
+mrtk_install_certbot_snap_package() {
+  if mrtk_certbot_is_usable && [[ "$(command -v certbot)" == "/usr/bin/certbot" ]]; then
+    mrtk_log "certbot already installed: $(command -v certbot)"
+    return 0
+  fi
+
+  mrtk_detect_os
+  mrtk_log "installing Certbot with snapd"
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends snapd
+  else
+    dnf install -y snapd
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now snapd.socket
+    ln -sfn /var/lib/snapd/snap /snap 2>/dev/null || true
+  fi
+
+  snap install core >/dev/null 2>&1 || true
+  snap refresh core >/dev/null 2>&1 || true
+  snap install --classic certbot
+  ln -sfn /snap/bin/certbot /usr/bin/certbot
+
+  mrtk_certbot_is_usable || mrtk_die "certbot snap installation failed"
+}
+
+mrtk_install_certbot_package() {
+  local method="${MNSCLOUD_CERTBOT_INSTALL_METHOD:-system}"
+
+  case "$method" in
+    system) mrtk_install_certbot_system_package ;;
+    snap) mrtk_install_certbot_snap_package ;;
+    *) mrtk_die "unsupported Certbot install method: $method" ;;
+  esac
+}
+
+mrtk_enable_certbot_timer() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if systemctl list-unit-files certbot.timer >/dev/null 2>&1; then
+    systemctl enable --now certbot.timer
+  elif systemctl list-unit-files snap.certbot.renew.timer >/dev/null 2>&1; then
+    systemctl enable --now snap.certbot.renew.timer
+  else
+    mrtk_warn "no Certbot renewal timer unit found"
+  fi
+}
+
+mrtk_ensure_certbot() {
+  mrtk_install_certbot_package
+  mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
+}
+
 mrtk_version_series() {
   local value="$1"
   if [[ "$value" =~ (^|[^0-9])([0-9]+)\.([0-9]+)([^0-9]|$) ]]; then

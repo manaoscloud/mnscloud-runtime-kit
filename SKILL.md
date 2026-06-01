@@ -10,7 +10,7 @@ MNSCloud service modules.
 - Prefer official upstream repositories for runtime packages when the MNSCloud module contract
   requires them.
 - Centralize host-level package repository setup for shared runtimes here, including Nginx,
-  Flutter, Deno, Node.js, Docker, and MariaDB.
+  Flutter, Deno, Node.js, Docker, Certbot, basic-auth utilities, and MariaDB.
 - Keep installers idempotent: rerunning a script should converge, not duplicate work.
 - Support only documented operating systems unless the validation matrix is extended in the same
   change.

@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
   cat <<EOF
-Usage: scripts/install-tool.sh --tool <nginx|flutter|mariadb|deno|nodejs|docker>
+Usage: scripts/install-tool.sh --tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|basic-auth-utils>
 EOF
 }
 
@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TOOL" in
-  nginx|flutter|mariadb|deno|nodejs|docker)
+  nginx|flutter|mariadb|deno|nodejs|docker|certbot|basic-auth-utils)
     exec "${ROOT_DIR}/installers/${TOOL}.sh"
     ;;
   "")

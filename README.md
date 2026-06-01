@@ -19,9 +19,9 @@ service configuration and business behavior.
 
 ## Boundary
 
-This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, and MariaDB. It
-must not contain customer data, production domains, private topology, API secrets, billing rules,
-tenant policy, PABX credentials, or module-specific application configuration.
+This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot, and
+MariaDB. It must not contain customer data, production domains, private topology, API secrets,
+billing rules, tenant policy, PABX credentials, or module-specific application configuration.
 
 Modules consume this kit for the question: "How do we install runtime X safely on this OS?"
 
@@ -41,6 +41,10 @@ Current installers:
   installs Node.js with npm.
 - `docker`: configures the official Docker repository and installs Docker Engine plus the Compose
   plugin.
+- `certbot`: installs Certbot and enables the renewal timer when available. The default method is
+  `system` to preserve server compatibility; `MNSCLOUD_CERTBOT_INSTALL_METHOD=snap` is available for
+  hosts where the official Certbot snap is preferred.
+- `basic-auth-utils`: installs the `htpasswd` utility used by edge/admin proxy modules.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
   MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
 
@@ -52,6 +56,8 @@ sudo ./scripts/install-tool.sh --tool flutter
 sudo MNSCLOUD_DENO_VERSION=2.8.1 ./scripts/install-tool.sh --tool deno
 sudo MNSCLOUD_NODE_MAJOR_VERSION=24 ./scripts/install-tool.sh --tool nodejs
 sudo ./scripts/install-tool.sh --tool docker
+sudo ./scripts/install-tool.sh --tool certbot
+sudo ./scripts/install-tool.sh --tool basic-auth-utils
 sudo MNSCLOUD_MARIADB_VERSION=12.3 ./scripts/install-tool.sh --tool mariadb
 ```
 
@@ -76,6 +82,8 @@ sudo ./scripts/doctor.sh --tool flutter
 sudo ./scripts/doctor.sh --tool deno
 sudo ./scripts/doctor.sh --tool nodejs
 sudo ./scripts/doctor.sh --tool docker
+sudo ./scripts/doctor.sh --tool certbot
+sudo ./scripts/doctor.sh --tool basic-auth-utils
 sudo ./scripts/doctor.sh --tool mariadb
 ```
 

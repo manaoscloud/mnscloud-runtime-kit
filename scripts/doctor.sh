@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|basic-auth-utils>]
 EOF
 }
 
@@ -101,6 +101,24 @@ check_docker() {
   fi
 }
 
+check_certbot() {
+  if command -v certbot >/dev/null 2>&1; then
+    mrtk_log "certbot=$(command -v certbot)"
+    certbot --version
+  else
+    mrtk_warn "certbot not installed"
+  fi
+}
+
+check_basic_auth_utils() {
+  if command -v htpasswd >/dev/null 2>&1; then
+    mrtk_log "htpasswd=$(command -v htpasswd)"
+    htpasswd -v 2>&1 | head -n 1 || true
+  else
+    mrtk_warn "htpasswd not installed"
+  fi
+}
+
 check_os
 case "$TOOL" in
   all)
@@ -110,6 +128,8 @@ case "$TOOL" in
     check_deno
     check_nodejs
     check_docker
+    check_certbot
+    check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
   flutter) check_flutter ;;
@@ -117,5 +137,7 @@ case "$TOOL" in
   deno) check_deno ;;
   nodejs) check_nodejs ;;
   docker) check_docker ;;
+  certbot) check_certbot ;;
+  basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac
