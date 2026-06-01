@@ -308,6 +308,10 @@ mrtk_certbot_is_usable() {
   command -v certbot >/dev/null 2>&1
 }
 
+mrtk_certbot_snap_is_installed() {
+  command -v snap >/dev/null 2>&1 && snap list certbot >/dev/null 2>&1
+}
+
 mrtk_remove_os_certbot_packages() {
   mrtk_detect_os
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
@@ -334,7 +338,7 @@ mrtk_install_epel_for_snapd() {
 }
 
 mrtk_install_certbot_package() {
-  if mrtk_certbot_is_usable && [[ "$(readlink -f "$(command -v certbot)")" == "/snap/bin/certbot" ]]; then
+  if mrtk_certbot_is_usable && mrtk_certbot_snap_is_installed; then
     mrtk_log "certbot already installed: $(command -v certbot)"
     return 0
   fi
@@ -361,8 +365,8 @@ mrtk_install_certbot_package() {
   ln -sfn /snap/bin/certbot /usr/bin/certbot
 
   mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
-  [[ "$(readlink -f "$(command -v certbot)")" == "/snap/bin/certbot" ]] ||
-    mrtk_die "expected certbot to resolve to /snap/bin/certbot"
+  mrtk_certbot_snap_is_installed || mrtk_die "expected certbot snap to be installed"
+  mrtk_log "Certbot installed: $(certbot --version)"
 }
 
 mrtk_enable_certbot_timer() {
