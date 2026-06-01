@@ -20,7 +20,7 @@ service configuration and business behavior.
 ## Boundary
 
 This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot,
-RabbitMQ/Erlang, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
+RabbitMQ/Erlang, Asterisk build dependencies, FreeSWITCH, OpenSIPS, Kamailio, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
 billing rules, tenant policy, PABX credentials, or module-specific application configuration.
 
 Modules consume this kit for the question: "How do we install runtime X safely on this OS?"
@@ -46,6 +46,14 @@ Current installers:
 - `rabbitmq`: configures the official Team RabbitMQ repositories for RabbitMQ and Erlang/OTP, then
   installs `rabbitmq-server` with Erlang packages. RabbitMQ service configuration remains owned by
   the consuming module.
+- `asterisk-build-deps`: installs Debian dependencies required to build the MNSCloud Asterisk
+  runtime from upstream Asterisk source. Asterisk source compilation remains owned by the consumer.
+- `freeswitch`: configures the official SignalWire FreeSWITCH repository using the supplied token
+  and installs the package set used by the MNSCloud FreeSWITCH runtime.
+- `opensips`: configures the official OpenSIPS package repository and installs the MNSCloud SBC
+  package set.
+- `kamailio`: configures the official Kamailio package repository and installs either the core or
+  WebRTC package set, selected by `MNSCLOUD_KAMAILIO_PACKAGE_PROFILE`.
 - `basic-auth-utils`: installs the `htpasswd` utility used by edge/admin proxy modules.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
   MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
@@ -60,6 +68,10 @@ sudo MNSCLOUD_NODE_MAJOR_VERSION=24 ./scripts/install-tool.sh --tool nodejs
 sudo ./scripts/install-tool.sh --tool docker
 sudo ./scripts/install-tool.sh --tool certbot
 sudo ./scripts/install-tool.sh --tool rabbitmq
+sudo ./scripts/install-tool.sh --tool asterisk-build-deps
+sudo MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN=... ./scripts/install-tool.sh --tool freeswitch
+sudo ./scripts/install-tool.sh --tool opensips
+sudo MNSCLOUD_KAMAILIO_PACKAGE_PROFILE=webrtc ./scripts/install-tool.sh --tool kamailio
 sudo ./scripts/install-tool.sh --tool basic-auth-utils
 sudo MNSCLOUD_MARIADB_VERSION=12.3 ./scripts/install-tool.sh --tool mariadb
 ```
@@ -87,6 +99,10 @@ sudo ./scripts/doctor.sh --tool nodejs
 sudo ./scripts/doctor.sh --tool docker
 sudo ./scripts/doctor.sh --tool certbot
 sudo ./scripts/doctor.sh --tool rabbitmq
+sudo ./scripts/doctor.sh --tool asterisk
+sudo ./scripts/doctor.sh --tool freeswitch
+sudo ./scripts/doctor.sh --tool opensips
+sudo ./scripts/doctor.sh --tool kamailio
 sudo ./scripts/doctor.sh --tool basic-auth-utils
 sudo ./scripts/doctor.sh --tool mariadb
 ```

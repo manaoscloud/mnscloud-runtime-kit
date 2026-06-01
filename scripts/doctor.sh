@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|basic-auth-utils>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|basic-auth-utils>]
 EOF
 }
 
@@ -126,6 +126,42 @@ check_rabbitmq() {
   fi
 }
 
+check_asterisk() {
+  if command -v asterisk >/dev/null 2>&1; then
+    mrtk_log "asterisk=$(command -v asterisk)"
+    asterisk -V || true
+  else
+    mrtk_warn "Asterisk not installed"
+  fi
+}
+
+check_freeswitch() {
+  if command -v freeswitch >/dev/null 2>&1; then
+    mrtk_log "freeswitch=$(command -v freeswitch)"
+    freeswitch -version 2>/dev/null | head -n 1 || true
+  else
+    mrtk_warn "FreeSWITCH not installed"
+  fi
+}
+
+check_opensips() {
+  if command -v opensips >/dev/null 2>&1; then
+    mrtk_log "opensips=$(command -v opensips)"
+    opensips -V | head -n 1 || true
+  else
+    mrtk_warn "OpenSIPS not installed"
+  fi
+}
+
+check_kamailio() {
+  if command -v kamailio >/dev/null 2>&1; then
+    mrtk_log "kamailio=$(command -v kamailio)"
+    kamailio -v | head -n 1 || true
+  else
+    mrtk_warn "Kamailio not installed"
+  fi
+}
+
 check_basic_auth_utils() {
   if command -v htpasswd >/dev/null 2>&1; then
     mrtk_log "htpasswd=$(command -v htpasswd)"
@@ -146,6 +182,10 @@ case "$TOOL" in
     check_docker
     check_certbot
     check_rabbitmq
+    check_asterisk
+    check_freeswitch
+    check_opensips
+    check_kamailio
     check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
@@ -156,6 +196,10 @@ case "$TOOL" in
   docker) check_docker ;;
   certbot) check_certbot ;;
   rabbitmq) check_rabbitmq ;;
+  asterisk) check_asterisk ;;
+  freeswitch) check_freeswitch ;;
+  opensips) check_opensips ;;
+  kamailio) check_kamailio ;;
   basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

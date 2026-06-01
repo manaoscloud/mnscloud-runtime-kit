@@ -568,6 +568,284 @@ mrtk_ensure_rabbitmq() {
   mrtk_install_rabbitmq_package
 }
 
+mrtk_detect_telephony_os() {
+  [[ -r /etc/os-release ]] || mrtk_die "/etc/os-release not found"
+  # shellcheck disable=SC1091
+  source /etc/os-release
+
+  MRTK_TELEPHONY_OS_ID="${ID:-}"
+  MRTK_TELEPHONY_OS_VERSION_ID="${VERSION_ID:-}"
+  MRTK_TELEPHONY_OS_MAJOR="${MRTK_TELEPHONY_OS_VERSION_ID%%.*}"
+  MRTK_TELEPHONY_OS_CODENAME="${VERSION_CODENAME:-}"
+  MRTK_TELEPHONY_OS_PRETTY_NAME="${PRETTY_NAME:-${MRTK_TELEPHONY_OS_ID} ${MRTK_TELEPHONY_OS_VERSION_ID}}"
+
+  case "${MRTK_TELEPHONY_OS_ID}:${MRTK_TELEPHONY_OS_MAJOR}" in
+    debian:12|debian:13)
+      MRTK_TELEPHONY_OS_FAMILY="debian"
+      ;;
+    rocky:8|rocky:9)
+      MRTK_TELEPHONY_OS_FAMILY="rocky"
+      ;;
+    *)
+      mrtk_die "unsupported telephony OS: ${MRTK_TELEPHONY_OS_PRETTY_NAME}. Supported: Debian 12/13 and Rocky Linux 8/9"
+      ;;
+  esac
+
+  export MRTK_TELEPHONY_OS_ID MRTK_TELEPHONY_OS_VERSION_ID MRTK_TELEPHONY_OS_MAJOR
+  export MRTK_TELEPHONY_OS_CODENAME MRTK_TELEPHONY_OS_PRETTY_NAME MRTK_TELEPHONY_OS_FAMILY
+}
+
+mrtk_ensure_asterisk_build_deps() {
+  mrtk_detect_telephony_os
+  [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]] ||
+    mrtk_die "Asterisk build dependencies are currently supported on Debian 12/13"
+
+  mrtk_log "installing Asterisk build and runtime dependencies from Debian repositories"
+  apt-get update -y
+  apt-get install -y --no-install-recommends \
+    build-essential git curl wget ca-certificates gnupg pkg-config autoconf automake \
+    libtool bison flex make patch libedit-dev libjansson-dev libxml2-dev libsqlite3-dev \
+    uuid-dev libssl-dev libcurl4-openssl-dev libnewt-dev libncurses5-dev libncurses-dev \
+    unixodbc unixodbc-dev odbc-mariadb default-mysql-client libbcg729-0 libbcg729-dev \
+    sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
+
+  if apt-cache show asterisk-codec-bcg729 >/dev/null 2>&1; then
+    apt-get install -y --no-install-recommends asterisk-codec-bcg729 ||
+      mrtk_warn "optional package asterisk-codec-bcg729 could not be installed"
+  else
+    mrtk_warn "optional package asterisk-codec-bcg729 was not found"
+  fi
+}
+
+mrtk_configure_freeswitch_repository() {
+  mrtk_detect_telephony_os
+  [[ "$MRTK_TELEPHONY_OS_ID:$MRTK_TELEPHONY_OS_VERSION_ID" == "debian:12" ]] ||
+    mrtk_die "FreeSWITCH packages are currently supported on Debian 12"
+
+  local token="${MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN:-${SIGNALWIRE_REPO_TOKEN:-}}"
+  [[ -n "$token" ]] || mrtk_die "SignalWire repository token is required for FreeSWITCH"
+
+  mrtk_log "configuring official FreeSWITCH SignalWire repository"
+  apt-get update -y
+  apt-get install -y --no-install-recommends ca-certificates curl gnupg
+  curl -fsSL https://freeswitch.org/fsget | bash -s "$token" release
+
+  if [[ -n "${MNSCLOUD_FREESWITCH_REPO_SUITE:-${FREESWITCH_REPO_SUITE:-}}" ]]; then
+    local suite="${MNSCLOUD_FREESWITCH_REPO_SUITE:-${FREESWITCH_REPO_SUITE:-}}"
+    mrtk_log "forcing FreeSWITCH repository suite to ${suite}"
+    sed -i "s/^Suites: .*/Suites: ${suite}/" /etc/apt/sources.list.d/freeswitch.sources
+  fi
+
+  apt-get update -y
+}
+
+mrtk_cleanup_freeswitch_packages() {
+  local status
+  status="$(dpkg-query -W -f='${db:Status-Abbrev}\n' ssmtp freeswitch-mod-voicemail freeswitch-meta-all 2>/dev/null || true)"
+  if printf '%s\n' "$status" | grep -Eq '^[ih]?[UF]'; then
+    mrtk_warn "cleaning broken optional FreeSWITCH meta packages"
+    DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge \
+      freeswitch-meta-all freeswitch-mod-voicemail ssmtp || true
+  fi
+  if dpkg-query -W -f='${db:Status-Abbrev}' freeswitch-mod-g729 >/dev/null 2>&1; then
+    mrtk_warn "removing freeswitch-mod-g729 to keep only free G.729 through bcg729"
+    DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge freeswitch-mod-g729 || true
+  fi
+}
+
+mrtk_apt_install_optional() {
+  local package="$1" description="${2:-$1}"
+  if ! apt-cache show "$package" >/dev/null 2>&1; then
+    mrtk_warn "optional package ${package} not found. Skipping ${description}."
+    return 1
+  fi
+  apt-get install -y --no-install-recommends "$package" && return 0
+  mrtk_warn "optional package ${package} could not be installed. Skipping ${description}."
+  return 1
+}
+
+mrtk_install_freeswitch_package() {
+  mrtk_configure_freeswitch_repository
+  mrtk_cleanup_freeswitch_packages
+
+  if ! apt-cache show freeswitch freeswitch-systemd freeswitch-conf-vanilla >/dev/null 2>&1; then
+    mrtk_die "FreeSWITCH packages were not found for the current suite. Use Debian 12 or set FREESWITCH_REPO_SUITE=bookworm."
+  fi
+
+  mrtk_log "installing FreeSWITCH packages"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    freeswitch freeswitch-systemd freeswitch-conf-vanilla \
+    freeswitch-mod-sofia freeswitch-mod-dptools freeswitch-mod-dialplan-xml freeswitch-mod-xml-curl \
+    freeswitch-mod-curl freeswitch-mod-commands freeswitch-mod-event-socket \
+    freeswitch-mod-console freeswitch-mod-logfile freeswitch-mod-db \
+    freeswitch-mod-hash freeswitch-mod-lua freeswitch-mod-conference \
+    freeswitch-mod-callcenter \
+    freeswitch-mod-opus freeswitch-mod-av freeswitch-mod-sndfile freeswitch-mod-native-file \
+    freeswitch-mod-local-stream freeswitch-mod-tone-stream freeswitch-mod-say-en \
+    freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
+    build-essential git cmake pkg-config \
+    unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
+    sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
+
+  mrtk_apt_install_optional "libfreeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build" ||
+    mrtk_apt_install_optional "freeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build" ||
+    mrtk_warn "FreeSWITCH headers package not found"
+  mrtk_apt_install_optional "freeswitch-mod-bcg729" "prebuilt FreeSWITCH bcg729 module" || true
+
+  command -v freeswitch >/dev/null 2>&1 || mrtk_die "FreeSWITCH installation failed"
+}
+
+mrtk_ensure_freeswitch() {
+  mrtk_install_freeswitch_package
+}
+
+mrtk_configure_opensips_repository() {
+  mrtk_detect_telephony_os
+  local version="${MNSCLOUD_OPENSIPS_VERSION:-3.6}"
+
+  if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    local codename="${MRTK_TELEPHONY_OS_CODENAME:-}"
+    case "$codename" in
+      bookworm) ;;
+      *) mrtk_die "OpenSIPS ${version}.x repository is supported only on Debian bookworm" ;;
+    esac
+    mrtk_log "configuring official OpenSIPS ${version}.x apt repository"
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    install -m 0755 -d /usr/share/keyrings
+    rm -f /usr/share/keyrings/opensips.gpg.tmp
+    curl -fsSL https://apt.opensips.org/opensips-org.gpg \
+      | gpg --dearmor -o /usr/share/keyrings/opensips.gpg.tmp
+    mv /usr/share/keyrings/opensips.gpg.tmp /usr/share/keyrings/opensips.gpg
+    chmod 0644 /usr/share/keyrings/opensips.gpg
+    cat > /etc/apt/sources.list.d/opensips.list <<EOF
+deb [signed-by=/usr/share/keyrings/opensips.gpg] https://apt.opensips.org ${codename} ${version}-releases
+EOF
+    apt-get update -y
+  else
+    local major="$MRTK_TELEPHONY_OS_MAJOR"
+    mrtk_log "configuring official OpenSIPS ${version}.x yum repository"
+    dnf install -y epel-release dnf-plugins-core ca-certificates curl
+    rpm --import https://yum.opensips.org/opensips-org.gpg
+    cat > /etc/yum.repos.d/opensips.repo <<EOF
+[opensips-${version}]
+name=OpenSIPS ${version}.x official repository
+baseurl=https://yum.opensips.org/${version}/releases/st/${major}/\$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.opensips.org/opensips-org.gpg
+EOF
+    dnf clean all
+    dnf makecache --repo "opensips-${version}"
+  fi
+}
+
+mrtk_install_opensips_package() {
+  mrtk_configure_opensips_repository
+  mrtk_detect_telephony_os
+
+  mrtk_log "installing OpenSIPS packages"
+  if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    apt-get install -y --no-install-recommends \
+      opensips opensips-http-modules opensips-json-module opensips-restclient-module \
+      opensips-tls-module sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+      mtr-tiny netcat-openbsd jq ca-certificates curl
+  else
+    dnf install -y \
+      opensips opensips-http-modules opensips-json-module opensips-restclient-module \
+      sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
+  fi
+
+  command -v opensips >/dev/null 2>&1 || mrtk_die "OpenSIPS installation failed"
+}
+
+mrtk_ensure_opensips() {
+  mrtk_install_opensips_package
+}
+
+mrtk_configure_kamailio_repository() {
+  mrtk_detect_telephony_os
+  local version="${MNSCLOUD_KAMAILIO_VERSION:-6.1}"
+
+  if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    local codename="${MRTK_TELEPHONY_OS_CODENAME:-}"
+    case "$codename" in
+      bookworm|trixie) ;;
+      *) mrtk_die "Kamailio ${version}.x repository is supported only on Debian bookworm/trixie" ;;
+    esac
+    local repo_suffix="${version//./}"
+    mrtk_log "configuring official Kamailio ${version}.x apt repository"
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    install -m 0755 -d /usr/share/keyrings
+    rm -f /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
+    curl -fsSL -o /usr/share/keyrings/kamailio.asc.tmp https://deb.kamailio.org/kamailiodebkey.gpg
+    gpg --batch --yes --dearmor -o /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
+    rm -f /usr/share/keyrings/kamailio.asc.tmp
+    mv /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.gpg
+    chmod 0644 /usr/share/keyrings/kamailio.gpg
+    cat > /etc/apt/sources.list.d/kamailio.list <<EOF
+deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio${repo_suffix} ${codename} main
+EOF
+    cat > /etc/apt/preferences.d/kamailio <<'EOF'
+Package: kamailio*
+Pin: origin deb.kamailio.org
+Pin-Priority: 1001
+
+Package: kamcli
+Pin: origin deb.kamailio.org
+Pin-Priority: 1001
+EOF
+    apt-get update -y
+  else
+    local major="$MRTK_TELEPHONY_OS_MAJOR"
+    mrtk_log "configuring official Kamailio ${version}.x yum repository"
+    dnf install -y epel-release dnf-plugins-core ca-certificates curl
+    rpm --import https://rpm.kamailio.org/rpm-pub.key
+    cat > /etc/yum.repos.d/kamailio.repo <<EOF
+[kamailio-${version}]
+name=Kamailio ${version}.x official repository
+baseurl=https://rpm.kamailio.org/rocky/${major}/${version}/${version}/\$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.kamailio.org/rpm-pub.key
+EOF
+    dnf clean all
+    dnf makecache --repo "kamailio-${version}"
+  fi
+}
+
+mrtk_install_kamailio_package() {
+  mrtk_configure_kamailio_repository
+  mrtk_detect_telephony_os
+  local profile="${MNSCLOUD_KAMAILIO_PACKAGE_PROFILE:-core}"
+
+  mrtk_log "installing Kamailio ${profile} packages"
+  if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    if [[ "$profile" == "webrtc" ]]; then
+      apt-get install -y --no-install-recommends \
+        kamailio kamailio-websocket-modules kamailio-tls-modules \
+        kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
+        kamailio-outbound-modules kamailio-presence-modules
+    else
+      apt-get install -y --no-install-recommends \
+        kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
+        kamailio-json-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+        mtr-tiny netcat-openbsd jq ca-certificates curl
+    fi
+  else
+    dnf install -y \
+      kamailio kamailio-utils kamailio-json kamailio-curl sngrep tcpdump ngrep \
+      bind-utils iputils traceroute mtr nc jq curl ca-certificates
+  fi
+
+  command -v kamailio >/dev/null 2>&1 || mrtk_die "Kamailio installation failed"
+}
+
+mrtk_ensure_kamailio() {
+  mrtk_install_kamailio_package
+}
+
 mrtk_version_series() {
   local value="$1"
   if [[ "$value" =~ (^|[^0-9])([0-9]+)\.([0-9]+)([^0-9]|$) ]]; then
