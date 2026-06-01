@@ -308,46 +308,45 @@ mrtk_certbot_is_usable() {
   command -v certbot >/dev/null 2>&1
 }
 
-mrtk_install_certbot_system_package() {
-  local nginx_plugin="${MNSCLOUD_CERTBOT_NGINX_PLUGIN:-true}"
-
-  if mrtk_certbot_is_usable; then
-    mrtk_log "certbot already installed: $(command -v certbot)"
-    return 0
-  fi
-
+mrtk_remove_os_certbot_packages() {
   mrtk_detect_os
-  mrtk_log "installing Certbot from operating-system packages"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    if [[ "$nginx_plugin" == "true" ]]; then
-      apt-get install -y --no-install-recommends certbot python3-certbot-nginx
-    else
-      apt-get install -y --no-install-recommends certbot
-    fi
+    apt-get remove -y certbot python3-certbot python3-certbot-nginx 2>/dev/null || true
   else
-    if [[ "$nginx_plugin" == "true" ]]; then
-      dnf install -y certbot python3-certbot-nginx || dnf install -y certbot
-    else
-      dnf install -y certbot
-    fi
+    dnf remove -y certbot python3-certbot-nginx 2>/dev/null || true
   fi
-
-  mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
 }
 
-mrtk_install_certbot_snap_package() {
-  if mrtk_certbot_is_usable && [[ "$(command -v certbot)" == "/usr/bin/certbot" ]]; then
+mrtk_install_epel_for_snapd() {
+  mrtk_detect_os
+  [[ "$MRTK_OS_FAMILY" == "rhel" ]] || return 0
+
+  local os_major="${MRTK_OS_VERSION_ID%%.*}"
+  case "$os_major" in
+    9|10)
+      dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${os_major}.noarch.rpm" ||
+        mrtk_die "failed to install EPEL release for snapd on RHEL-compatible ${os_major}"
+      ;;
+    *)
+      mrtk_die "snapd is not configured for this RHEL-compatible version: ${MRTK_OS_VERSION_ID}"
+      ;;
+  esac
+}
+
+mrtk_install_certbot_package() {
+  if mrtk_certbot_is_usable && [[ "$(readlink -f "$(command -v certbot)")" == "/snap/bin/certbot" ]]; then
     mrtk_log "certbot already installed: $(command -v certbot)"
     return 0
   fi
 
   mrtk_detect_os
-  mrtk_log "installing Certbot with snapd"
+  mrtk_remove_os_certbot_packages
+  mrtk_log "installing Certbot with the upstream-recommended snap package"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
     apt-get update -y
     apt-get install -y --no-install-recommends snapd
   else
+    mrtk_install_epel_for_snapd
     dnf install -y snapd
   fi
 
@@ -361,17 +360,9 @@ mrtk_install_certbot_snap_package() {
   snap install --classic certbot
   ln -sfn /snap/bin/certbot /usr/bin/certbot
 
-  mrtk_certbot_is_usable || mrtk_die "certbot snap installation failed"
-}
-
-mrtk_install_certbot_package() {
-  local method="${MNSCLOUD_CERTBOT_INSTALL_METHOD:-system}"
-
-  case "$method" in
-    system) mrtk_install_certbot_system_package ;;
-    snap) mrtk_install_certbot_snap_package ;;
-    *) mrtk_die "unsupported Certbot install method: $method" ;;
-  esac
+  mrtk_certbot_is_usable || mrtk_die "certbot installation failed"
+  [[ "$(readlink -f "$(command -v certbot)")" == "/snap/bin/certbot" ]] ||
+    mrtk_die "expected certbot to resolve to /snap/bin/certbot"
 }
 
 mrtk_enable_certbot_timer() {

@@ -41,9 +41,8 @@ Current installers:
   installs Node.js with npm.
 - `docker`: configures the official Docker repository and installs Docker Engine plus the Compose
   plugin.
-- `certbot`: installs Certbot and enables the renewal timer when available. The default method is
-  `system` to preserve server compatibility; `MNSCLOUD_CERTBOT_INSTALL_METHOD=snap` is available for
-  hosts where the official Certbot snap is preferred.
+- `certbot`: removes any old OS-packaged Certbot install, installs Certbot with the
+  upstream-recommended Snap package, and enables the renewal timer when available.
 - `basic-auth-utils`: installs the `htpasswd` utility used by edge/admin proxy modules.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
   MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
