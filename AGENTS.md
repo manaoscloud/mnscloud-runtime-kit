@@ -28,7 +28,9 @@ Runtime installer repository for common MNSCloud infrastructure dependencies.
 - `VERSION` must match the intended semantic version without `v`.
 - `releases/manifest.json` is the canonical update-discovery source for
   modules and automation.
-- Publish a release by validating, committing, tagging `vX.Y.Z`, pushing
-  `main`, and pushing the tag.
+- Publish an operator-visible release with
+  `scripts/release-runtime-kit.sh --version X.Y.Z --channel stable --publish`.
+- The shared release helper must create/update `VERSION`, `releases/manifest.json`, the release
+  commit, the semver tag, and the GitHub Release with a consistent title.
 - Never update a consumer repo to a runtime-kit version until the matching tag
-  exists on GitHub.
+  and GitHub Release exist on GitHub.
