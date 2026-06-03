@@ -149,3 +149,14 @@ AI coding agents must follow the same flow: update installer code, validate,
 update `VERSION` and `releases/manifest.json`, commit, tag, push `main`, push
 the tag, and create the GitHub Release. Do not update consumers to a runtime-kit
 ref until that tag and GitHub Release exist on GitHub.
+
+When `--publish` is used from a maintainer workspace, the shared release helper
+also syncs the published tag into the MNSCloud control-plane release cache by
+calling `ProcMonitoringAgentReleasePublish`. This keeps App/API/Agent update
+discovery aligned with the GitHub release that was just published. The helper
+reads `/etc/mnscloud/workspace.env`, prefers `DB_MIGRATION_USER` and
+`DB_MIGRATION_PASS` when present, and uses a temporary MariaDB defaults file so
+database passwords are not passed on the process command line.
+
+Set `MNSCLOUD_RELEASE_DB_SYNC=0` or pass `--skip-db-sync` only for public/test
+release dry-runs where the control-plane database is intentionally unavailable.
