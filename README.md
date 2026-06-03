@@ -157,5 +157,17 @@ reads `/etc/mnscloud/workspace.env`, prefers `DB_MIGRATION_USER` and
 `DB_MIGRATION_PASS` when present, and uses a temporary MariaDB defaults file so
 database passwords are not passed on the process command line.
 
+When the helper runs inside GitHub Actions, direct database access is not used.
+Configure repository or organization secrets/variables instead:
+
+- `MNSCLOUD_RELEASE_SYNC_URL`: control-plane base URL, for example
+  `https://dev.example.com` or `https://dev.example.com/api/v1`.
+- `MNSCLOUD_RELEASE_SYNC_TOKEN`: bearer token accepted by the API release sync
+  endpoint.
+
+After publishing the GitHub Release, the shared workflow posts the release
+metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
+updates the DB-backed runtime release cache.
+
 Set `MNSCLOUD_RELEASE_DB_SYNC=0` or pass `--skip-db-sync` only for public/test
 release dry-runs where the control-plane database is intentionally unavailable.

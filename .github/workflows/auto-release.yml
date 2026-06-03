@@ -119,3 +119,53 @@ jobs:
         run: |
           set -euo pipefail
           bash "${{ inputs.release_script }}" --version "${{ steps.version.outputs.version }}" --publish
+
+      - name: Notify MNSCloud release cache
+        env:
+          MNSCLOUD_RELEASE_SYNC_URL: ${{ vars.MNSCLOUD_RELEASE_SYNC_URL || secrets.MNSCLOUD_RELEASE_SYNC_URL || '' }}
+          MNSCLOUD_RELEASE_SYNC_TOKEN: ${{ secrets.MNSCLOUD_RELEASE_SYNC_TOKEN || secrets.MNSCLOUD_DEPLOY_TOKEN || '' }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MNSCLOUD_RELEASE_SYNC_URL" ] || [ -z "$MNSCLOUD_RELEASE_SYNC_TOKEN" ]; then
+            echo "MNSCLOUD_RELEASE_SYNC_URL or MNSCLOUD_RELEASE_SYNC_TOKEN is not configured; release cache notification skipped."
+            exit 0
+          fi
+          python3 - <<'PY' > /tmp/mnscloud-release-payload.json
+          import json
+          import os
+          import subprocess
+
+          version = os.environ["RELEASE_VERSION"]
+          ref = f"v{version}"
+          with open("releases/manifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          channel = "stable"
+          stable = manifest.get("channels", {}).get(channel, {})
+          released_at = stable.get("releasedAt")
+          build_ref = subprocess.check_output(
+              ["git", "rev-list", "-n", "1", ref],
+              text=True,
+          ).strip()[:12]
+          print(json.dumps({
+              "product": manifest.get("product"),
+              "channel": channel,
+              "version": version,
+              "ref": ref,
+              "buildRef": build_ref,
+              "buildDate": released_at,
+              "releasedAt": released_at,
+              "notes": f"Synced from GitHub Actions release {ref}.",
+          }))
+          PY
+          base_url="${MNSCLOUD_RELEASE_SYNC_URL%/}"
+          if [[ "$base_url" == */api/v1 ]]; then
+            endpoint="${base_url}/runtime/releases/publish"
+          else
+            endpoint="${base_url}/api/v1/runtime/releases/publish"
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${MNSCLOUD_RELEASE_SYNC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data @/tmp/mnscloud-release-payload.json \
+            "$endpoint"
