@@ -63,6 +63,10 @@ jobs:
           ref: ${{ inputs.runtime_kit_ref }}
           path: .mnscloud-runtime-kit
 
+      - name: Ignore auxiliary runtime kit checkout
+        if: ${{ inputs.checkout_runtime_kit }}
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+
       - name: Setup Deno
         if: ${{ inputs.setup_deno }}
         uses: denoland/setup-deno@v2
