@@ -19,10 +19,14 @@ MNSCloud service modules.
   syntax validation.
 - Production consumers must pin Git tags. `main` is development-only.
 - `VERSION` and `releases/manifest.json` are the release-discovery contract.
-- Do not update consumers to a runtime-kit ref until the matching tag and GitHub
-  Release have been pushed to GitHub.
-- Use `scripts/release-runtime-kit.sh --version X.Y.Z --channel stable --publish`
-  to publish an operator-visible release.
+- Do not update consumers to a runtime-kit ref until the matching release commit,
+  Git tag, and GitHub Release exist on GitHub.
+- Operator-visible runtime-kit releases are published by the repository
+  `Release` GitHub Actions workflow after validated changes are committed and
+  pushed to `main`.
+- `scripts/release-runtime-kit.sh --version X.Y.Z --channel stable --publish`
+  is the canonical release engine used by Actions and is reserved for
+  break-glass maintainer use.
 - Use the shared `lib/release.sh` helper for release scripts in consumer repositories; do not copy
   per-repository release logic.
 

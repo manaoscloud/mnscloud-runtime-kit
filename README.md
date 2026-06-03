@@ -138,17 +138,16 @@ MNSCloud modules and automation must use this contract:
 
 ## Maintainer Release Flow
 
-Only maintainers should publish production runtime-kit releases:
+Production runtime-kit releases are published by GitHub Actions. Maintainers and
+AI coding agents should update installer code, validate, commit, and push to
+`main`; the repository `Release` workflow increments the patch version, updates
+`VERSION` and `releases/manifest.json`, creates the release commit, tags it, and
+publishes the GitHub Release.
 
-```bash
-cd /opt/mnscloud/mnscloud-runtime-kit
-scripts/release-runtime-kit.sh --version 0.1.7 --channel stable --publish
-```
-
-AI coding agents must follow the same flow: update installer code, validate,
-update `VERSION` and `releases/manifest.json`, commit, tag, push `main`, push
-the tag, and create the GitHub Release. Do not update consumers to a runtime-kit
-ref until that tag and GitHub Release exist on GitHub.
+Do not update consumers to a runtime-kit ref until the matching release commit,
+Git tag, and GitHub Release exist on GitHub. The local
+`scripts/release-runtime-kit.sh` script remains the canonical release engine used
+by Actions and should be run manually only as a break-glass maintainer operation.
 
 When `--publish` is used from a maintainer workspace, the shared release helper
 also syncs the published tag into the MNSCloud control-plane release cache by
