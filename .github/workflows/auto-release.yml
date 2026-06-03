@@ -1,0 +1,117 @@
+name: Auto Release
+
+on:
+  workflow_call:
+    inputs:
+      release_script:
+        description: "Repository release script to execute."
+        required: true
+        type: string
+      version:
+        description: "Optional explicit semantic version. When empty, patch is incremented from VERSION."
+        required: false
+        type: string
+        default: ""
+      setup_node:
+        description: "Install Node.js dependencies before releasing."
+        required: false
+        type: boolean
+        default: false
+      node_version:
+        description: "Node.js version."
+        required: false
+        type: string
+        default: "24"
+      setup_deno:
+        description: "Install Deno before releasing."
+        required: false
+        type: boolean
+        default: true
+      checkout_runtime_kit:
+        description: "Checkout mnscloud-runtime-kit for repositories that consume the shared release helper."
+        required: false
+        type: boolean
+        default: true
+      runtime_kit_ref:
+        description: "mnscloud-runtime-kit ref used by consumers."
+        required: false
+        type: string
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'Release ') }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout runtime kit
+        if: ${{ inputs.checkout_runtime_kit }}
+        uses: actions/checkout@v5
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+
+      - name: Setup Deno
+        if: ${{ inputs.setup_deno }}
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Setup Node.js
+        if: ${{ inputs.setup_node }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+
+      - name: Install Node.js dependencies
+        if: ${{ inputs.setup_node }}
+        run: npm ci
+
+      - name: Configure git author
+        run: |
+          git config user.name "mnscloud-release-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested="${{ inputs.version }}"
+          if [ -n "$requested" ]; then
+            version="$requested"
+          else
+            current="$(tr -d '[:space:]' < VERSION)"
+            IFS='.' read -r major minor patch_extra <<< "$current"
+            patch="${patch_extra%%[-+]*}"
+            if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
+              echo "VERSION must be x.y.z when auto-incrementing; found: $current" >&2
+              exit 1
+            fi
+            version="${major}.${minor}.$((patch + 1))"
+          fi
+          if ! [[ "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          MNSCLOUD_RUNTIME_KIT_DIR: ${{ github.workspace }}/.mnscloud-runtime-kit
+        run: |
+          set -euo pipefail
+          bash "${{ inputs.release_script }}" --version "${{ steps.version.outputs.version }}" --publish
