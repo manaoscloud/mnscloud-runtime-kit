@@ -131,6 +131,7 @@ jobs:
             echo "MNSCLOUD_RELEASE_SYNC_URL or MNSCLOUD_RELEASE_SYNC_TOKEN is not configured; release cache notification skipped."
             exit 0
           fi
+          set +e
           python3 - <<'PY' > /tmp/mnscloud-release-payload.json
           import json
           import os
@@ -140,6 +141,9 @@ jobs:
           ref = f"v{version}"
           with open("releases/manifest.json", encoding="utf-8") as handle:
               manifest = json.load(handle)
+          product = manifest.get("product")
+          if product not in {"mnscloud-agent", "mnscloud-api", "mnscloud-app"}:
+              raise SystemExit(78)
           channel = "stable"
           stable = manifest.get("channels", {}).get(channel, {})
           released_at = stable.get("releasedAt")
@@ -148,7 +152,7 @@ jobs:
               text=True,
           ).strip()[:12]
           print(json.dumps({
-              "product": manifest.get("product"),
+              "product": product,
               "channel": channel,
               "version": version,
               "ref": ref,
@@ -158,6 +162,15 @@ jobs:
               "notes": f"Synced from GitHub Actions release {ref}.",
           }))
           PY
+          payload_status="$?"
+          set -e
+          if [ "$payload_status" -eq 78 ]; then
+            echo "Product is not managed by the control-plane runtime release cache; notification skipped."
+            exit 0
+          fi
+          if [ "$payload_status" -ne 0 ]; then
+            exit "$payload_status"
+          fi
           base_url="${MNSCLOUD_RELEASE_SYNC_URL%/}"
           if [[ "$base_url" == */api/v1 ]]; then
             endpoint="${base_url}/runtime/releases/publish"
