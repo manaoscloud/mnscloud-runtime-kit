@@ -51,13 +51,13 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Checkout runtime kit
         if: ${{ inputs.checkout_runtime_kit }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: manaoscloud/mnscloud-runtime-kit
           ref: ${{ inputs.runtime_kit_ref }}
@@ -75,7 +75,7 @@ jobs:
 
       - name: Setup Node.js
         if: ${{ inputs.setup_node }}
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node_version }}
           cache: npm
