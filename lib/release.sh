@@ -23,100 +23,10 @@ Options:
   --add-path <path>                 Extra git path to include in the release commit. May be repeated.
   --sync-package-json               Sync package.json and package-lock.json root versions.
   --publish                         Push main + tag and create the GitHub Release with gh.
-  --skip-db-sync                    Do not sync the published release into the MNSCloud DB cache.
 
 The helper updates VERSION and releases/manifest.json, runs validations, commits release metadata,
-creates an annotated semver tag, optionally publishes the GitHub Release, and syncs the release
-cache through ProcMonitoringAgentReleasePublish when workspace DB credentials are available.
+creates an annotated semver tag, and optionally publishes the GitHub Release.
 EOF
-}
-
-mrtk_release_sql_escape() {
-  printf "%s" "$1" | sed "s/'/''/g"
-}
-
-mrtk_release_db_env_file() {
-  local candidate
-  for candidate in \
-    "${MNSCLOUD_WORKSPACE_ENV_FILE:-}" \
-    "/etc/mnscloud/workspace.env"; do
-    [[ -n "$candidate" && -r "$candidate" ]] || continue
-    printf '%s\n' "$candidate"
-    return 0
-  done
-  return 1
-}
-
-mrtk_release_sync_db() {
-  local product="$1" channel="$2" version="$3" tag="$4" released_at="$5"
-
-  [[ "${MNSCLOUD_RELEASE_DB_SYNC:-1}" != "0" ]] || {
-    mrtk_release_log "release DB sync disabled by MNSCLOUD_RELEASE_DB_SYNC=0"
-    return 0
-  }
-
-  command -v mariadb >/dev/null 2>&1 || {
-    mrtk_release_log "release DB sync skipped: mariadb client not found"
-    return 0
-  }
-
-  local env_file
-  env_file="$(mrtk_release_db_env_file)" || {
-    mrtk_release_log "release DB sync skipped: workspace env file not found"
-    return 0
-  }
-
-  # shellcheck disable=SC1090
-  set -a
-  source "$env_file"
-  set +a
-
-  local host="${DB_HOST:-}" port="${DB_PORT:-3306}" db="${DB_NAME:-}"
-  local user="${DB_MIGRATION_USER:-${DB_USER:-}}" pass="${DB_MIGRATION_PASS:-${DB_PASS:-}}"
-  [[ -n "$host" && -n "$db" && -n "$user" ]] || {
-    mrtk_release_log "release DB sync skipped: DB_HOST/DB_NAME/DB_USER are not configured"
-    return 0
-  }
-
-  local build_ref
-  build_ref="$(git rev-list -n 1 "$tag" | cut -c1-12)"
-  [[ -n "$build_ref" ]] || mrtk_release_die "could not resolve release commit for ${tag}"
-
-  local build_date
-  build_date="$(printf "%s" "$released_at" | sed 's/T/ /; s/Z$//; s/[.][0-9][0-9][0-9]$//')"
-  [[ -n "$build_date" ]] || build_date="$(git log -1 --format='%cI' "$tag" | sed 's/T/ /; s/[+-][0-9][0-9]:[0-9][0-9]$//')"
-
-  local defaults_file sql_file
-  defaults_file="$(mktemp)"
-  sql_file="$(mktemp)"
-  chmod 0600 "$defaults_file" "$sql_file"
-  {
-    printf '[client]\n'
-    printf 'host=%s\n' "$host"
-    printf 'port=%s\n' "$port"
-    printf 'user=%s\n' "$user"
-    printf 'database=%s\n' "$db"
-    if [[ -n "$pass" ]]; then
-      printf 'password=%s\n' "$pass"
-    fi
-  } > "$defaults_file"
-  cat > "$sql_file" <<SQL
-CALL ProcMonitoringAgentReleasePublish(
-  '$(mrtk_release_sql_escape "$product")',
-  '$(mrtk_release_sql_escape "$channel")',
-  '$(mrtk_release_sql_escape "$version")',
-  '$(mrtk_release_sql_escape "$build_ref")',
-  '$(mrtk_release_sql_escape "$build_date")',
-  'Synced by mnscloud-runtime-kit release helper from ${tag}.'
-);
-SQL
-
-  mrtk_release_log "syncing release cache in DB: ${product} ${tag} (${build_ref})"
-  if ! mariadb --defaults-extra-file="$defaults_file" < "$sql_file"; then
-    rm -f "$defaults_file" "$sql_file"
-    mrtk_release_die "release DB sync failed for ${product} ${tag}"
-  fi
-  rm -f "$defaults_file" "$sql_file"
 }
 
 mrtk_release_prepare() {
@@ -127,7 +37,6 @@ mrtk_release_prepare() {
   local minimum_version=""
   local sync_package_json="0"
   local publish="0"
-  local skip_db_sync="0"
   local -a validations=()
   local -a add_paths=("VERSION" "releases/manifest.json")
 
@@ -142,7 +51,6 @@ mrtk_release_prepare() {
       --add-path) add_paths+=("${2:-}"); shift 2 ;;
       --sync-package-json) sync_package_json="1"; shift ;;
       --publish) publish="1"; shift ;;
-      --skip-db-sync) skip_db_sync="1"; shift ;;
       --help|-h) mrtk_release_usage; return 0 ;;
       *) mrtk_release_die "unknown argument: $1" ;;
     esac
@@ -236,9 +144,6 @@ console.log(manifest.channels?.[channel]?.releasedAt ?? "");
     else
       gh release create "$tag" --repo "$repository" --title "${product} ${tag}" --generate-notes
     fi
-    if [[ "$skip_db_sync" != "1" ]]; then
-      mrtk_release_sync_db "$product" "$channel" "$version" "$tag" "$released_at"
-    fi
     return 0
   fi
 
@@ -246,7 +151,4 @@ console.log(manifest.channels?.[channel]?.releasedAt ?? "");
   mrtk_release_log "git push origin main"
   mrtk_release_log "git push origin ${tag}"
   mrtk_release_log "gh release create ${tag} --repo ${repository} --title \"${product} ${tag}\" --generate-notes"
-  if [[ "$skip_db_sync" != "1" ]]; then
-    mrtk_release_log "after publishing, sync DB cache with this helper or rerun with --publish"
-  fi
 }
