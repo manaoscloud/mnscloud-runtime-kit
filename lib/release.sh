@@ -22,6 +22,7 @@ Options:
   --validate <command>              Validation command. May be repeated.
   --add-path <path>                 Extra git path to include in the release commit. May be repeated.
   --sync-package-json               Sync package.json and package-lock.json root versions.
+  --sync-pubspec                    Sync pubspec.yaml version.
   --publish                         Push main + tag and create the GitHub Release with gh.
 
 The helper updates VERSION and releases/manifest.json, runs validations, commits release metadata,
@@ -36,6 +37,7 @@ mrtk_release_prepare() {
   local channel="stable"
   local minimum_version=""
   local sync_package_json="0"
+  local sync_pubspec="0"
   local publish="0"
   local -a validations=()
   local -a add_paths=("VERSION" "releases/manifest.json")
@@ -50,6 +52,7 @@ mrtk_release_prepare() {
       --validate) validations+=("${2:-}"); shift 2 ;;
       --add-path) add_paths+=("${2:-}"); shift 2 ;;
       --sync-package-json) sync_package_json="1"; shift ;;
+      --sync-pubspec) sync_pubspec="1"; shift ;;
       --publish) publish="1"; shift ;;
       --help|-h) mrtk_release_usage; return 0 ;;
       *) mrtk_release_die "unknown argument: $1" ;;
@@ -91,6 +94,27 @@ for (const file of ["package.json", "package-lock.json"]) {
 }
 ' "$version"
     add_paths+=("package.json" "package-lock.json")
+  fi
+
+  if [[ "$sync_pubspec" == "1" ]]; then
+    deno eval '
+const version = Deno.args[0];
+const file = "pubspec.yaml";
+try {
+  const text = await Deno.readTextFile(file);
+  const updated = text.replace(/^version:\s*.+$/m, `version: ${version}`);
+  if (updated === text && !/^version:\s*.+$/m.test(text)) {
+    throw new Error("pubspec.yaml is missing a version field");
+  }
+  await Deno.writeTextFile(file, updated);
+} catch (error) {
+  if (error instanceof Deno.errors.NotFound) {
+    throw new Error("pubspec.yaml not found");
+  }
+  throw error;
+}
+' "$version"
+    add_paths+=("pubspec.yaml")
   fi
 
   mkdir -p releases
