@@ -20,7 +20,7 @@ service configuration and business behavior.
 ## Boundary
 
 This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot,
-RabbitMQ/Erlang, Asterisk build dependencies, FreeSWITCH, OpenSIPS, Kamailio, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
+RabbitMQ/Erlang, Asterisk build dependencies, FreeSWITCH, OpenSIPS, Kamailio, coturn, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
 billing rules, tenant policy, PABX credentials, or module-specific application configuration.
 
 Modules consume this kit for the question: "How do we install runtime X safely on this OS?"
@@ -54,6 +54,7 @@ Current installers:
   package set.
 - `kamailio`: configures the official Kamailio package repository and installs either the core or
   WebRTC package set, selected by `MNSCLOUD_KAMAILIO_PACKAGE_PROFILE`.
+- `coturn`: installs coturn and supporting utilities for dedicated TURN/STUN media edge modules.
 - `basic-auth-utils`: installs the `htpasswd` utility used by edge/admin proxy modules.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
   MariaDB server/client/backup packages plus Galera where the OS packaging uses a separate package.
@@ -72,6 +73,7 @@ sudo ./scripts/install-tool.sh --tool asterisk-build-deps
 sudo MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN=... ./scripts/install-tool.sh --tool freeswitch
 sudo ./scripts/install-tool.sh --tool opensips
 sudo MNSCLOUD_KAMAILIO_PACKAGE_PROFILE=webrtc ./scripts/install-tool.sh --tool kamailio
+sudo ./scripts/install-tool.sh --tool coturn
 sudo ./scripts/install-tool.sh --tool basic-auth-utils
 sudo MNSCLOUD_MARIADB_VERSION=12.3 ./scripts/install-tool.sh --tool mariadb
 ```
