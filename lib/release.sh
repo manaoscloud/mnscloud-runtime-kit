@@ -153,7 +153,7 @@ console.log(manifest.channels?.[channel]?.releasedAt ?? "");
     bash -o pipefail -c "$validation"
   done
 
-  git add "${add_paths[@]}"
+  git add -f "${add_paths[@]}"
   git commit -m "Release ${product} ${tag}"
   git tag -a "$tag" -m "Release ${product} ${tag}"
   mrtk_release_log "release metadata committed and tag created: ${tag}"
