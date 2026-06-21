@@ -146,6 +146,12 @@ jobs:
           channel = "stable"
           stable = manifest.get("channels", {}).get(channel, {})
           released_at = stable.get("releasedAt")
+          artifact = stable.get("artifact") or {}
+          artifact_name = artifact.get("name")
+          artifact_url = None
+          if artifact_name:
+              repository = os.environ["GITHUB_REPOSITORY"]
+              artifact_url = f"https://github.com/{repository}/releases/download/{ref}/{artifact_name}"
           build_ref = subprocess.check_output(
               ["git", "rev-list", "-n", "1", ref],
               text=True,
@@ -159,6 +165,11 @@ jobs:
               "buildDate": released_at,
               "releasedAt": released_at,
               "notes": f"Synced from GitHub Actions release {ref}.",
+              "artifactName": artifact_name,
+              "artifactUrl": artifact_url,
+              "artifactSha256": artifact.get("sha256"),
+              "artifactSizeBytes": artifact.get("sizeBytes"),
+              "artifactContentType": artifact.get("contentType"),
           }))
           PY
           payload_status="$?"

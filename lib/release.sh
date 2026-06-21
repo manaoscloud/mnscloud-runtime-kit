@@ -21,6 +21,7 @@ Options:
   --minimum-version <x.y.z>         Default minimumVersion when a channel is created.
   --validate <command>              Validation command. May be repeated.
   --add-path <path>                 Extra git path to include in the release commit. May be repeated.
+  --asset-glob <glob>               File glob to upload as GitHub Release asset. May be repeated.
   --sync-package-json               Sync package.json and package-lock.json root versions.
   --sync-pubspec                    Sync pubspec.yaml version.
   --publish                         Push main + tag and create the GitHub Release with gh.
@@ -41,6 +42,7 @@ mrtk_release_prepare() {
   local publish="0"
   local -a validations=()
   local -a add_paths=("VERSION" "releases/manifest.json")
+  local -a asset_globs=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -51,6 +53,7 @@ mrtk_release_prepare() {
       --minimum-version) minimum_version="${2:-}"; shift 2 ;;
       --validate) validations+=("${2:-}"); shift 2 ;;
       --add-path) add_paths+=("${2:-}"); shift 2 ;;
+      --asset-glob) asset_globs+=("${2:-}"); shift 2 ;;
       --sync-package-json) sync_package_json="1"; shift ;;
       --sync-pubspec) sync_pubspec="1"; shift ;;
       --publish) publish="1"; shift ;;
@@ -161,12 +164,25 @@ console.log(manifest.channels?.[channel]?.releasedAt ?? "");
   if [[ "$publish" == "1" ]]; then
     command -v gh >/dev/null 2>&1 ||
       mrtk_release_die "gh is required for --publish"
+    local -a release_assets=()
+    local asset_glob asset_path
+    shopt -s nullglob
+    for asset_glob in "${asset_globs[@]}"; do
+      for asset_path in $asset_glob; do
+        [[ -f "$asset_path" ]] && release_assets+=("$asset_path")
+      done
+    done
+    shopt -u nullglob
     git push origin main
     git push origin "$tag"
     if gh release view "$tag" --repo "$repository" >/dev/null 2>&1; then
       mrtk_release_log "GitHub Release already exists: ${tag}"
     else
       gh release create "$tag" --repo "$repository" --title "${product} ${tag}" --generate-notes
+    fi
+    if [[ "${#release_assets[@]}" -gt 0 ]]; then
+      gh release upload "$tag" --repo "$repository" --clobber "${release_assets[@]}"
+      mrtk_release_log "uploaded ${#release_assets[@]} GitHub Release asset(s)"
     fi
     return 0
   fi

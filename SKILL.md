@@ -29,6 +29,10 @@ MNSCloud service modules.
   break-glass maintainer use.
 - Use the shared `lib/release.sh` helper for release scripts in consumer repositories; do not copy
   per-repository release logic.
+- When a consumer publishes deployable artifacts, write `channels.<channel>.artifact` in
+  `releases/manifest.json` during validation and use `--asset-glob` so the GitHub Release carries
+  the exact artifact consumed by runtime hosts. Runtime hosts should download and checksum-verify
+  artifacts instead of rebuilding source code.
 
 ## Validation
 

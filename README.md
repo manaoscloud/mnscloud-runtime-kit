@@ -163,3 +163,20 @@ Configure repository or organization secrets/variables:
 After publishing the GitHub Release, the shared workflow posts the release
 metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
 updates the DB-backed runtime release cache.
+
+Repositories that publish deployable artifacts, such as `mnscloud-app`, must add artifact metadata
+under `channels.<channel>.artifact` in `releases/manifest.json` during the release validation step:
+
+```json
+{
+  "name": "mnscloud-app-browser-v0.1.0.tar.gz",
+  "sha256": "<64-character sha256>",
+  "sizeBytes": 123456,
+  "contentType": "application/gzip"
+}
+```
+
+Use `--asset-glob` in the repository release script to upload those files to the GitHub Release.
+The shared workflow derives the final HTTPS asset URL from the release tag and sends URL, SHA-256,
+size, and content type to the MNSCloud runtime release cache. Runtime hosts must download and verify
+that artifact instead of rebuilding source code locally.
