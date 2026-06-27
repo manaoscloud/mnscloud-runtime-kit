@@ -830,12 +830,12 @@ mrtk_install_kamailio_package() {
     else
       apt-get install -y --no-install-recommends \
         kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
-        kamailio-json-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+        kamailio-json-modules kamailio-outbound-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
         mtr-tiny netcat-openbsd jq ca-certificates curl
     fi
   else
     dnf install -y \
-      kamailio kamailio-utils kamailio-json kamailio-curl sngrep tcpdump ngrep \
+      kamailio kamailio-utils kamailio-json kamailio-curl kamailio-extra sngrep tcpdump ngrep \
       bind-utils iputils traceroute mtr nc jq curl ca-certificates
   fi
 
