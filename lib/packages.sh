@@ -664,6 +664,17 @@ mrtk_apt_install_optional() {
   return 1
 }
 
+mrtk_dnf_install_optional() {
+  local package="$1" description="${2:-$1}"
+  if ! dnf repoquery --quiet --available "$package" >/dev/null 2>&1; then
+    mrtk_warn "optional package ${package} not found. Skipping ${description}."
+    return 1
+  fi
+  dnf install -y "$package" && return 0
+  mrtk_warn "optional package ${package} could not be installed. Skipping ${description}."
+  return 1
+}
+
 mrtk_install_freeswitch_package() {
   mrtk_configure_freeswitch_repository
   mrtk_cleanup_freeswitch_packages
@@ -748,14 +759,16 @@ mrtk_install_opensips_package() {
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
     apt-get install -y --no-install-recommends \
       opensips opensips-http-modules opensips-json-module opensips-restclient-module \
-      opensips-rtpengine-module \
       opensips-tls-module sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
+    mrtk_apt_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
+      mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   else
     dnf install -y \
       opensips opensips-http-modules opensips-json-module opensips-restclient-module \
-      opensips-rtpengine-module \
       sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
+    mrtk_dnf_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
+      mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   fi
 
   command -v opensips >/dev/null 2>&1 || mrtk_die "OpenSIPS installation failed"
