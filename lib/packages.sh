@@ -748,11 +748,13 @@ mrtk_install_opensips_package() {
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
     apt-get install -y --no-install-recommends \
       opensips opensips-http-modules opensips-json-module opensips-restclient-module \
+      opensips-rtpengine-module \
       opensips-tls-module sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
   else
     dnf install -y \
       opensips opensips-http-modules opensips-json-module opensips-restclient-module \
+      opensips-rtpengine-module \
       sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
   fi
 
