@@ -763,12 +763,18 @@ mrtk_install_opensips_package() {
       mtr-tiny netcat-openbsd jq ca-certificates curl
     mrtk_apt_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
+    mrtk_apt_install_optional "opensips-db-text-module" "OpenSIPS db_text module package" || true
+    mrtk_apt_install_optional "opensips-uac-module" "OpenSIPS UAC/UAC registrant module package" || true
+    mrtk_apt_install_optional "opensips-mi-fifo-module" "OpenSIPS MI FIFO module package" || true
   else
     dnf install -y \
       opensips opensips-http-modules opensips-json-module opensips-restclient-module \
       sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
     mrtk_dnf_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
+    mrtk_dnf_install_optional "opensips-db-text-module" "OpenSIPS db_text module package" || true
+    mrtk_dnf_install_optional "opensips-uac-module" "OpenSIPS UAC/UAC registrant module package" || true
+    mrtk_dnf_install_optional "opensips-mi-fifo-module" "OpenSIPS MI FIFO module package" || true
   fi
 
   command -v opensips >/dev/null 2>&1 || mrtk_die "OpenSIPS installation failed"
