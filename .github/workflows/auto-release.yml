@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: true
+      deno_version:
+        description: "Pinned Deno version used by release jobs."
+        required: false
+        type: string
+        default: "2.8.1"
       checkout_runtime_kit:
         description: "Checkout mnscloud-runtime-kit for repositories that consume the shared release helper."
         required: false
@@ -68,9 +73,52 @@ jobs:
 
       - name: Setup Deno
         if: ${{ inputs.setup_deno }}
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+        shell: bash
+        env:
+          DENO_VERSION: ${{ inputs.deno_version }}
+        run: |
+          set -euo pipefail
+
+          case "$(uname -m)" in
+            x86_64|amd64) deno_arch="x86_64-unknown-linux-gnu" ;;
+            aarch64|arm64) deno_arch="aarch64-unknown-linux-gnu" ;;
+            *) echo "Unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          install_dir="${RUNNER_TEMP}/deno-${DENO_VERSION}"
+          archive="${RUNNER_TEMP}/deno-${DENO_VERSION}.zip"
+          url="https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${deno_arch}.zip"
+
+          rm -rf "$install_dir"
+          mkdir -p "$install_dir"
+
+          for attempt in 1 2 3 4 5; do
+            if curl -fL --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
+              -o "$archive" "$url"; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "Failed to download Deno ${DENO_VERSION} after ${attempt} attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
+
+          python3 - "$archive" "$install_dir" <<'PY'
+          import os
+          import stat
+          import sys
+          import zipfile
+
+          archive, install_dir = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(archive) as zip_file:
+              zip_file.extractall(install_dir)
+          deno_bin = os.path.join(install_dir, "deno")
+          os.chmod(deno_bin, os.stat(deno_bin).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+          PY
+
+          echo "$install_dir" >> "$GITHUB_PATH"
+          "$install_dir/deno" --version
 
       - name: Setup Node.js
         if: ${{ inputs.setup_node }}
