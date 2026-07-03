@@ -759,19 +759,20 @@ mrtk_install_opensips_package() {
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
     apt-get install -y --no-install-recommends \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
-      opensips-tls-module sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+      opensips-tls-module opensips-cli sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
     mrtk_apt_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   else
     dnf install -y \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
-      sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
+      opensips-cli sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
     mrtk_dnf_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   fi
 
   command -v opensips >/dev/null 2>&1 || mrtk_die "OpenSIPS installation failed"
+  command -v opensips-cli >/dev/null 2>&1 || mrtk_die "OpenSIPS CLI installation failed"
 }
 
 mrtk_ensure_opensips() {
