@@ -846,12 +846,12 @@ mrtk_install_kamailio_package() {
       apt-get install -y --no-install-recommends \
         kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-outbound-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
-        mtr-tiny netcat-openbsd jq ca-certificates curl
+        mtr-tiny netcat-openbsd jq sqlite3 ca-certificates curl
     fi
   else
     dnf install -y \
       kamailio kamailio-utils kamailio-json kamailio-curl kamailio-extra sngrep tcpdump ngrep \
-      bind-utils iputils traceroute mtr nc jq curl ca-certificates
+      bind-utils iputils traceroute mtr nc jq sqlite curl ca-certificates
   fi
 
   command -v kamailio >/dev/null 2>&1 || mrtk_die "Kamailio installation failed"
