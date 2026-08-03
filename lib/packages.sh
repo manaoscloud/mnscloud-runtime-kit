@@ -844,7 +844,7 @@ mrtk_install_kamailio_package() {
         kamailio-outbound-modules kamailio-presence-modules
     else
       apt-get install -y --no-install-recommends \
-        kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
+        kamailio kamailio-extra-modules kamailio-utils-modules kamailio-sqlite-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-outbound-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
         mtr-tiny netcat-openbsd jq sqlite3 ca-certificates curl
     fi
