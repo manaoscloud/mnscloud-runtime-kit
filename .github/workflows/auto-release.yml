@@ -189,7 +189,25 @@ jobs:
           with open("releases/manifest.json", encoding="utf-8") as handle:
               manifest = json.load(handle)
           product = manifest.get("product")
-          if product not in {"mnscloud-agent", "mnscloud-api", "mnscloud-app"}:
+          supported_products = {
+              "mnscloud-agent",
+              "mnscloud-api",
+              "mnscloud-app",
+              "mnscloud-kamailio-softswitch",
+              "mnscloud-nginx",
+              "mnscloud-rabbitmq",
+              "mnscloud-workers",
+              "mnscloud-freeradius",
+              "mnscloud-freeswitch",
+              "mnscloud-asterisk",
+              "mnscloud-opensips-sbc",
+              "mnscloud-kamailio-webrtc",
+              "mnscloud-turn",
+              "mnscloud-media",
+              "mnscloud-devsecops",
+              "mnscloud-webapps",
+          }
+          if product not in supported_products:
               raise SystemExit(78)
           channel = "stable"
           stable = manifest.get("channels", {}).get(channel, {})
