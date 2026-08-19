@@ -607,7 +607,7 @@ mrtk_ensure_asterisk_build_deps() {
     libtool bison flex make patch libedit-dev libjansson-dev libxml2-dev libsqlite3-dev \
     uuid-dev libssl-dev libcurl4-openssl-dev libnewt-dev libncurses5-dev libncurses-dev \
     unixodbc unixodbc-dev odbc-mariadb default-mysql-client libbcg729-0 libbcg729-dev \
-    sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
+    sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
 
   if apt-cache show asterisk-codec-bcg729 >/dev/null 2>&1; then
     apt-get install -y --no-install-recommends asterisk-codec-bcg729 ||
@@ -696,7 +696,7 @@ mrtk_install_freeswitch_package() {
     freeswitch-mod-json-cdr freeswitch-mod-mariadb freeswitch-mod-http-cache \
     build-essential git cmake pkg-config \
     unixodbc odbc-mariadb libbcg729-0 libbcg729-dev \
-    sngrep tcpdump ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
+    sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
 
   mrtk_apt_install_optional "libfreeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build" ||
     mrtk_apt_install_optional "freeswitch-dev" "FreeSWITCH headers for optional mod_bcg729 build" ||
@@ -759,14 +759,14 @@ mrtk_install_opensips_package() {
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
     apt-get install -y --no-install-recommends \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
-      opensips-tls-module sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+      opensips-tls-module sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
     mrtk_apt_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   else
     dnf install -y \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
-      sngrep tcpdump ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
+      sngrep tcpdump wireshark-cli ngrep bind-utils iputils traceroute mtr nc jq curl ca-certificates
     mrtk_dnf_install_optional "opensips-rtpengine-module" "OpenSIPS rtpengine module package" ||
       mrtk_warn "OpenSIPS rtpengine module package is not separate in this repository"
   fi
@@ -841,16 +841,16 @@ mrtk_install_kamailio_package() {
       apt-get install -y --no-install-recommends \
         kamailio kamailio-websocket-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
-        kamailio-outbound-modules kamailio-presence-modules
+        kamailio-outbound-modules kamailio-presence-modules wireshark-common
     else
       apt-get install -y --no-install-recommends \
         kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
-        kamailio-json-modules kamailio-outbound-modules sngrep tcpdump ngrep dnsutils iputils-ping traceroute \
+        kamailio-json-modules kamailio-outbound-modules sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
         mtr-tiny netcat-openbsd jq ca-certificates curl
     fi
   else
     dnf install -y \
-      kamailio kamailio-utils kamailio-json kamailio-curl kamailio-extra sngrep tcpdump ngrep \
+      kamailio kamailio-utils kamailio-json kamailio-curl kamailio-extra sngrep tcpdump wireshark-cli ngrep \
       bind-utils iputils traceroute mtr nc jq curl ca-certificates
   fi
 
