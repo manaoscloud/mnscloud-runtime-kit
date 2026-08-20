@@ -837,13 +837,19 @@ mrtk_install_kamailio_package() {
 
   mrtk_log "installing Kamailio ${profile} packages"
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    local apt_options=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    apt_options+=(
+      -o Dpkg::Options::=--force-confdef
+      -o Dpkg::Options::=--force-confold
+    )
     if [[ "$profile" == "webrtc" ]]; then
-      apt-get install -y --no-install-recommends \
+      DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
         kamailio kamailio-websocket-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
         kamailio-outbound-modules kamailio-presence-modules wireshark-common
     else
-      apt-get install -y --no-install-recommends \
+      DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
         kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-outbound-modules sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
         mtr-tiny netcat-openbsd jq ca-certificates curl
