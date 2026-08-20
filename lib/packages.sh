@@ -715,14 +715,20 @@ mrtk_configure_opensips_repository() {
   local version="${MNSCLOUD_OPENSIPS_VERSION:-3.6}"
 
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    local apt_options=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    apt_options+=(
+      -o Dpkg::Options::=--force-confdef
+      -o Dpkg::Options::=--force-confold
+    )
     local codename="${MRTK_TELEPHONY_OS_CODENAME:-}"
     case "$codename" in
       bookworm) ;;
       *) mrtk_die "OpenSIPS ${version}.x repository is supported only on Debian bookworm" ;;
     esac
     mrtk_log "configuring official OpenSIPS ${version}.x apt repository"
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    apt-get "${apt_options[@]}" update
+    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/opensips.gpg.tmp
     curl -fsSL https://apt.opensips.org/opensips-org.gpg \
@@ -732,7 +738,7 @@ mrtk_configure_opensips_repository() {
     cat > /etc/apt/sources.list.d/opensips.list <<EOF
 deb [signed-by=/usr/share/keyrings/opensips.gpg] https://apt.opensips.org ${codename} ${version}-releases
 EOF
-    apt-get update -y
+    apt-get "${apt_options[@]}" update
   else
     local major="$MRTK_TELEPHONY_OS_MAJOR"
     mrtk_log "configuring official OpenSIPS ${version}.x yum repository"
@@ -757,7 +763,13 @@ mrtk_install_opensips_package() {
 
   mrtk_log "installing OpenSIPS packages"
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
-    apt-get install -y --no-install-recommends \
+    local apt_options=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    apt_options+=(
+      -o Dpkg::Options::=--force-confdef
+      -o Dpkg::Options::=--force-confold
+    )
+    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
       opensips-tls-module sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
@@ -783,6 +795,12 @@ mrtk_configure_kamailio_repository() {
   local version="${MNSCLOUD_KAMAILIO_VERSION:-6.1}"
 
   if [[ "$MRTK_TELEPHONY_OS_FAMILY" == "debian" ]]; then
+    local apt_options=()
+    mapfile -t apt_options < <(mrtk_apt_options)
+    apt_options+=(
+      -o Dpkg::Options::=--force-confdef
+      -o Dpkg::Options::=--force-confold
+    )
     local codename="${MRTK_TELEPHONY_OS_CODENAME:-}"
     case "$codename" in
       bookworm|trixie) ;;
@@ -790,8 +808,8 @@ mrtk_configure_kamailio_repository() {
     esac
     local repo_suffix="${version//./}"
     mrtk_log "configuring official Kamailio ${version}.x apt repository"
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    apt-get "${apt_options[@]}" update
+    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
     curl -fsSL -o /usr/share/keyrings/kamailio.asc.tmp https://deb.kamailio.org/kamailiodebkey.gpg
@@ -811,7 +829,7 @@ Package: kamcli
 Pin: origin deb.kamailio.org
 Pin-Priority: 1001
 EOF
-    apt-get update -y
+    apt-get "${apt_options[@]}" update
   else
     local major="$MRTK_TELEPHONY_OS_MAJOR"
     mrtk_log "configuring official Kamailio ${version}.x yum repository"
