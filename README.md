@@ -164,17 +164,15 @@ After publishing the GitHub Release, the shared workflow posts the release
 metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
 updates the DB-backed runtime release cache.
 
-The shared workflow also queues the Agent-backed runtime rollout immediately after the release cache
-is synchronized. It uses the same control-plane URL and release sync token already configured for
-release publication:
+The shared workflow publishes release metadata to the control plane. After synchronizing the
+release cache, the API queues the Agent-backed runtime rollout from the same release publish
+request:
 
 - `MNSCLOUD_RELEASE_SYNC_URL`: control-plane base URL.
-- `MNSCLOUD_RELEASE_SYNC_TOKEN`: bearer token allowed to publish release metadata and call
-  `POST /api/v1/monitoring/agents/runtime-products/<product>/update`.
+- `MNSCLOUD_RELEASE_SYNC_TOKEN`: bearer token accepted by the API release sync endpoint.
 
-The workflow queues the product rollout for supported Agent-managed runtimes and polls the product
-fleet until the update is current on all known nodes. It fails on job failure or timeout. Products
-outside the Agent runtime catalog are skipped; database rollout remains outside this helper.
+The API queues the product rollout for supported Agent-managed runtimes. Products outside the Agent
+runtime catalog are not included; database rollout remains outside this helper.
 
 Repositories that publish deployable artifacts, such as `mnscloud-app`, must add artifact metadata
 under `channels.<channel>.artifact` in `releases/manifest.json` during the release validation step:
