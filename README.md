@@ -164,6 +164,20 @@ After publishing the GitHub Release, the shared workflow posts the release
 metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
 updates the DB-backed runtime release cache.
 
+The shared workflow can also queue the Agent-backed runtime rollout immediately after the release
+cache is synchronized. This is opt-in and controlled by repository or organization configuration:
+
+- `MNSCLOUD_RUNTIME_ROLLOUT_ENABLED=true`: enables automatic rollout.
+- `MNSCLOUD_RUNTIME_ROLLOUT_URL`: optional control-plane base URL; falls back to
+  `MNSCLOUD_RELEASE_SYNC_URL`.
+- `MNSCLOUD_RUNTIME_ROLLOUT_TOKEN`: bearer token for
+  `POST /api/v1/monitoring/agents/runtime-products/<product>/update`; falls back to
+  `MNSCLOUD_DEPLOY_TOKEN`.
+
+When enabled, the workflow queues the product rollout for supported Agent-managed runtimes and polls
+the product fleet until the update is current on all known nodes. It fails on job failure or timeout.
+Products outside the Agent runtime catalog are skipped; database rollout remains outside this helper.
+
 Repositories that publish deployable artifacts, such as `mnscloud-app`, must add artifact metadata
 under `channels.<channel>.artifact` in `releases/manifest.json` during the release validation step:
 
