@@ -267,13 +267,13 @@ jobs:
         if: ${{ steps.release_cache.outputs.product != '' }}
         env:
           MNSCLOUD_RUNTIME_ROLLOUT_URL: ${{ vars.MNSCLOUD_RELEASE_SYNC_URL || secrets.MNSCLOUD_RELEASE_SYNC_URL || '' }}
-          MNSCLOUD_RUNTIME_ROLLOUT_TOKEN: ${{ secrets.MNSCLOUD_DEPLOY_TOKEN || '' }}
+          MNSCLOUD_RUNTIME_ROLLOUT_TOKEN: ${{ secrets.MNSCLOUD_RELEASE_SYNC_TOKEN || secrets.MNSCLOUD_DEPLOY_TOKEN || '' }}
           RUNTIME_PRODUCT: ${{ steps.release_cache.outputs.product }}
           RUNTIME_TARGET_REF: ${{ steps.release_cache.outputs.ref }}
         run: |
           set -euo pipefail
           if [ -z "$MNSCLOUD_RUNTIME_ROLLOUT_URL" ] || [ -z "$MNSCLOUD_RUNTIME_ROLLOUT_TOKEN" ]; then
-            echo "MNSCLOUD_RELEASE_SYNC_URL and MNSCLOUD_DEPLOY_TOKEN are required to queue the runtime rollout." >&2
+            echo "MNSCLOUD_RELEASE_SYNC_URL and MNSCLOUD_RELEASE_SYNC_TOKEN are required to queue the runtime rollout." >&2
             exit 1
           fi
           case "$RUNTIME_PRODUCT" in
