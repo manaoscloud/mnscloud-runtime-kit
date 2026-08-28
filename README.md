@@ -165,11 +165,11 @@ metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
 updates the DB-backed runtime release cache.
 
 The shared workflow also queues the Agent-backed runtime rollout immediately after the release cache
-is synchronized. It uses the same control-plane URL and deploy token already configured for release
-and deployment automation:
+is synchronized. It uses the same control-plane URL and release sync token already configured for
+release publication:
 
 - `MNSCLOUD_RELEASE_SYNC_URL`: control-plane base URL.
-- `MNSCLOUD_DEPLOY_TOKEN`: bearer token allowed to call
+- `MNSCLOUD_RELEASE_SYNC_TOKEN`: bearer token allowed to publish release metadata and call
   `POST /api/v1/monitoring/agents/runtime-products/<product>/update`.
 
 The workflow queues the product rollout for supported Agent-managed runtimes and polls the product
