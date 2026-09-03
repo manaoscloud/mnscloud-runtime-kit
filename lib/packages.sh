@@ -568,6 +568,99 @@ mrtk_ensure_rabbitmq() {
   mrtk_install_rabbitmq_package
 }
 
+mrtk_install_openbao_dependencies() {
+  mrtk_detect_os
+  mrtk_log "installing OpenBao installer dependencies"
+
+  if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends ca-certificates curl tar
+  else
+    dnf install -y ca-certificates curl tar
+  fi
+}
+
+mrtk_openbao_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) printf 'amd64\n' ;;
+    aarch64|arm64) printf 'arm64\n' ;;
+    *) mrtk_die "unsupported OpenBao architecture: $(uname -m)" ;;
+  esac
+}
+
+mrtk_openbao_installed_version() {
+  if command -v bao >/dev/null 2>&1; then
+    bao version 2>/dev/null | awk '{print $2; exit}' | sed 's/^v//'
+  fi
+}
+
+mrtk_openbao_latest_version() {
+  local api_url="${MNSCLOUD_OPENBAO_LATEST_URL:-https://api.github.com/repos/openbao/openbao/releases/latest}"
+  curl -fsSL "$api_url" | awk -F'"' '/"tag_name"[[:space:]]*:/ {gsub(/^v/, "", $4); print $4; exit}'
+}
+
+mrtk_install_or_update_openbao_binary() {
+  local version="${MNSCLOUD_OPENBAO_VERSION:-}"
+  local install_path="${MNSCLOUD_OPENBAO_BIN:-/usr/local/bin/bao}"
+  local repository="${MNSCLOUD_OPENBAO_REPOSITORY:-openbao/openbao}"
+  local base_url="${MNSCLOUD_OPENBAO_RELEASE_BASE_URL:-https://github.com/${repository}/releases/download}"
+  local tmp_dir arch asset_url checksum_url expected actual installed_version
+
+  mrtk_install_openbao_dependencies
+
+  if [[ -z "$version" || "$version" == "latest" ]]; then
+    version="$(mrtk_openbao_latest_version)"
+  fi
+  version="${version#v}"
+  [[ "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.-]+)?$ ]] ||
+    mrtk_die "invalid OpenBao version: ${version:-empty}"
+
+  installed_version="$(mrtk_openbao_installed_version || true)"
+  if [[ "$installed_version" == "$version" && -x "$install_path" ]]; then
+    mrtk_log "OpenBao ${version} already installed at ${install_path}"
+    return 0
+  fi
+
+  arch="$(mrtk_openbao_arch)"
+  asset_url="${base_url}/v${version}/openbao_${version}_linux_${arch}.tar.gz"
+  checksum_url="${base_url}/v${version}/checksums.txt"
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir:-}"' RETURN
+
+  mrtk_log "downloading OpenBao ${version} (${arch})"
+  curl -fsSL "$asset_url" -o "${tmp_dir}/openbao.tar.gz"
+  curl -fsSL "$checksum_url" -o "${tmp_dir}/checksums.txt"
+
+  expected="$(awk -v file="openbao_${version}_linux_${arch}.tar.gz" '$2 == file {print $1; exit}' "${tmp_dir}/checksums.txt")"
+  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] ||
+    mrtk_die "checksum for openbao_${version}_linux_${arch}.tar.gz not found"
+  actual="$(sha256sum "${tmp_dir}/openbao.tar.gz" | awk '{print $1}')"
+  [[ "${actual,,}" == "${expected,,}" ]] ||
+    mrtk_die "OpenBao checksum mismatch"
+
+  tar -xzf "${tmp_dir}/openbao.tar.gz" -C "$tmp_dir"
+  [[ -x "${tmp_dir}/bao" ]] || mrtk_die "bao binary missing from OpenBao archive"
+
+  install -d -m 0755 "$(dirname "$install_path")"
+  install -m 0755 "${tmp_dir}/bao" "${install_path}.new"
+  mv "${install_path}.new" "$install_path"
+  ln -sfn "$install_path" /usr/bin/bao 2>/dev/null || true
+
+  installed_version="$(mrtk_openbao_installed_version || true)"
+  [[ "$installed_version" == "$version" ]] ||
+    mrtk_die "expected OpenBao ${version} after installation, got ${installed_version:-not installed}"
+  mrtk_log "OpenBao ${version} installed at ${install_path}"
+}
+
+mrtk_update_openbao_binary() {
+  mrtk_install_or_update_openbao_binary
+}
+
+mrtk_ensure_openbao() {
+  mrtk_install_or_update_openbao_binary
+  command -v bao >/dev/null 2>&1 || mrtk_die "OpenBao installation failed"
+}
+
 mrtk_detect_telephony_os() {
   [[ -r /etc/os-release ]] || mrtk_die "/etc/os-release not found"
   # shellcheck disable=SC1091

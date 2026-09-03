@@ -20,7 +20,7 @@ service configuration and business behavior.
 ## Boundary
 
 This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot,
-RabbitMQ/Erlang, Asterisk build dependencies, FreeSWITCH, OpenSIPS, Kamailio, coturn, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
+RabbitMQ/Erlang, OpenBao, Asterisk build dependencies, FreeSWITCH, OpenSIPS, Kamailio, coturn, and MariaDB. It must not contain customer data, production domains, private topology, API secrets,
 billing rules, tenant policy, PABX credentials, or module-specific application configuration.
 
 Modules consume this kit for the question: "How do we install runtime X safely on this OS?"
@@ -46,6 +46,9 @@ Current installers:
 - `rabbitmq`: configures the official Team RabbitMQ repositories for RabbitMQ and Erlang/OTP, then
   installs `rabbitmq-server` with Erlang packages. RabbitMQ service configuration remains owned by
   the consuming module.
+- `openbao`: downloads the official OpenBao release binary, verifies it with the published
+  checksum, and installs the `bao` CLI/server binary. OpenBao service configuration remains owned by
+  the consuming module.
 - `asterisk-build-deps`: installs Debian dependencies required to build the MNSCloud Asterisk
   runtime from upstream Asterisk source. Asterisk source compilation remains owned by the consumer.
 - `freeswitch`: configures the official SignalWire FreeSWITCH repository using the supplied token
@@ -69,6 +72,7 @@ sudo MNSCLOUD_NODE_MAJOR_VERSION=24 ./scripts/install-tool.sh --tool nodejs
 sudo ./scripts/install-tool.sh --tool docker
 sudo ./scripts/install-tool.sh --tool certbot
 sudo ./scripts/install-tool.sh --tool rabbitmq
+sudo MNSCLOUD_OPENBAO_VERSION=2.6.2 ./scripts/install-tool.sh --tool openbao
 sudo ./scripts/install-tool.sh --tool asterisk-build-deps
 sudo MNSCLOUD_FREESWITCH_SIGNALWIRE_TOKEN=... ./scripts/install-tool.sh --tool freeswitch
 sudo ./scripts/install-tool.sh --tool opensips
