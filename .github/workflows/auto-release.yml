@@ -196,6 +196,7 @@ jobs:
               "mnscloud-app",
               "mnscloud-kamailio-softswitch",
               "mnscloud-nginx",
+              "mnscloud-openvault",
               "mnscloud-rabbitmq",
               "mnscloud-workers",
               "mnscloud-freeradius",
