@@ -11,7 +11,7 @@ MNSCloud service modules.
   requires them.
 - Centralize host-level package repository setup for shared runtimes here, including Nginx,
   Flutter, Deno, Node.js, Docker, Certbot, RabbitMQ/Erlang, Asterisk build dependencies,
-  FreeSWITCH, OpenSIPS, Kamailio, coturn, basic-auth utilities, and MariaDB.
+  OpenBao, FreeSWITCH, OpenSIPS, Kamailio, coturn, basic-auth utilities, and MariaDB.
 - Keep installers idempotent: rerunning a script should converge, not duplicate work.
 - Support only documented operating systems unless the validation matrix is extended in the same
   change.
