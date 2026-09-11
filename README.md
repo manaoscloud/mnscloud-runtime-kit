@@ -194,3 +194,37 @@ Use `--asset-glob` in the repository release script to upload those files to the
 The shared workflow derives the final HTTPS asset URL from the release tag and sends URL, SHA-256,
 size, and content type to the MNSCloud runtime release cache. Runtime hosts must download and verify
 that artifact instead of rebuilding source code locally.
+
+## Local configuration reconciliation primitives
+
+`lib/env_reconcile.py` supplies Linux-only Python 3 primitives for release-owned adapters.
+It is a library, not a remotely callable configuration editor. The adapter owns fixed paths,
+field rules, validation, Agent assignment/lease checks, and service activation/recovery.
+No network requests or service commands are executed by the library.
+
+Supported operations are initialize-if-empty (conflicting existing values are rejected),
+three-way managed values with an explicit baseline, and additive comma-separated sets.
+Unknown fields/comments are preserved. Only a deliberately restricted single-line literal
+subset of environment syntax is accepted; unsupported quotes, expansions in managed values,
+multiline values, duplicate managed fields and ambiguous files fail closed.
+
+Create a private local journal directory before using `EnvJournal.stage()` and `apply()`.
+Paths must be absolute, with no symlink or group/world-writable ancestors; directories and
+files must belong to the executing account. Production adapters run as root. Existing
+configuration files are required: bootstrap file creation is deliberately not provided.
+Plans contain the before-image and candidate, including secrets, and stay local with mode
+0600 in a 0700 directory. Never upload a journal, log it or put it into an Agent result.
+Plan operation IDs are immutable. Adapters must implement bounded journal retention after
+verified service activation; do not remove an unverified recovery journal.
+
+The library locks cooperating executors, checks content/metadata before replacement, writes
+and fsyncs a temporary file, atomically replaces the destination, and fsyncs its directory.
+A crash after replacement is recovered by reading actual contents, without a second write.
+`apply().changed` describes a write in that invocation, not service readiness. It cannot
+establish that a prior activation succeeded: adapters must journal and verify activation
+separately. The library never claims multi-file atomicity, service rollback, or exclusion of
+an unrelated privileged process that ignores the lock. Remote leases, fencing, rollout
+barriers and secret delivery remain control-plane/adapter responsibilities.
+
+Run `python3 -m unittest discover -s tests -v` for conflict, retry, crash, lock, permissions,
+path safety and preservation tests. There is no Windows implementation in this library.

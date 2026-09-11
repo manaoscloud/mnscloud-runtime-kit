@@ -40,3 +40,12 @@ MNSCloud service modules.
 bash -n scripts/*.sh lib/*.sh installers/*.sh
 ./scripts/doctor.sh --help
 ```
+
+## Reconciliation primitives
+
+Keep `lib/env_reconcile.py` generic and Linux-only. Adapters live in their owning modules;
+remote input must never choose paths, field allowlists or executable commands. Journals
+are local secret-bearing recovery material, never diagnostics. Changes require
+`python3 -m unittest discover -s tests -v`. Preserve fail-closed format handling, immutable
+operation IDs, before-image retention, no-op behavior and filesystem checks. The library
+alone is not an Agent capability or an authorization/service activation implementation.

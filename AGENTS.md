@@ -4,7 +4,7 @@ Runtime installer repository for common MNSCloud infrastructure dependencies.
 
 ## Scope
 
-- Shared installation logic only.
+- Shared installation and local configuration reconciliation primitives only.
 - No module-specific service configuration.
 - No secrets, customer data, private topology, internal policy, or product business rules.
 
