@@ -17,6 +17,16 @@ service configuration and business behavior.
   - Rocky Linux 9/10
   - AlmaLinux 9/10
 
+## apt/dpkg locks
+
+Every apt call in `lib/packages.sh` goes through `mrtk_apt_get` (`lib/apt.sh`). Right after
+boot, `unattended-upgrades`/apt-daily often hold the dpkg or apt lists lock, and plain
+`apt-get` fails immediately with exit 100. `mrtk_apt_get` first waits for those locks
+(checked with `lslocks`, logging progress every 30s) and gives installs
+`DPkg::Lock::Timeout` through a transient `APT_CONFIG`, so `/etc/apt` is never changed.
+The wait defaults to 600 seconds; override it with `MNSCLOUD_APT_LOCK_TIMEOUT`. When the
+wait expires, apt-get still runs so its error names the lock holder.
+
 ## Boundary
 
 This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot,
