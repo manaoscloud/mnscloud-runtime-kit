@@ -3,12 +3,14 @@
 MRTK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=os.sh
 source "${MRTK_LIB_DIR}/os.sh"
+# shellcheck source=apt.sh
+source "${MRTK_LIB_DIR}/apt.sh"
 
 mrtk_install_packages() {
   mrtk_detect_os
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y "$@"
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y "$@"
   else
     dnf install -y "$@"
   fi
@@ -19,8 +21,8 @@ mrtk_install_deno_dependencies() {
   mrtk_log "installing Deno installer dependencies"
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl unzip
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends ca-certificates curl unzip
   else
     dnf install -y ca-certificates curl unzip
   fi
@@ -81,8 +83,8 @@ mrtk_install_nginx_org_repository() {
   mrtk_detect_os
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y curl gnupg2 ca-certificates lsb-release debian-archive-keyring
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y curl gnupg2 ca-certificates lsb-release debian-archive-keyring
 
     curl -fsSL https://nginx.org/keys/nginx_signing.key \
       | gpg --dearmor \
@@ -137,8 +139,8 @@ mrtk_install_nginx_package() {
 
   mrtk_detect_os
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y nginx
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y nginx
   else
     dnf install -y nginx
   fi
@@ -168,8 +170,8 @@ mrtk_install_nodesource_repository() {
 
   mrtk_log "configuring official NodeSource repository for Node.js ${major}.x"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends ca-certificates curl gnupg
     curl -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
   else
     dnf install -y ca-certificates curl
@@ -189,7 +191,7 @@ mrtk_install_nodejs_package() {
   mrtk_detect_os
   mrtk_log "installing Node.js ${major}.x from official NodeSource repository"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get install -y --no-install-recommends nodejs
+    mrtk_apt_get install -y --no-install-recommends nodejs
   else
     dnf install -y nodejs
   fi
@@ -210,8 +212,8 @@ mrtk_install_docker_repository() {
   mrtk_log "configuring official Docker repository"
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends ca-certificates curl gnupg
 
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg
@@ -262,8 +264,8 @@ mrtk_install_docker_package() {
   mrtk_detect_os
   mrtk_log "installing Docker Engine and Compose plugin from official Docker repository"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   else
     dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   fi
@@ -291,8 +293,8 @@ mrtk_install_basic_auth_utils() {
   mrtk_detect_os
   mrtk_log "installing HTTP basic-auth utility package"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends apache2-utils
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends apache2-utils
   else
     dnf install -y httpd-tools
   fi
@@ -315,7 +317,7 @@ mrtk_certbot_snap_is_installed() {
 mrtk_remove_os_certbot_packages() {
   mrtk_detect_os
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get remove -y certbot python3-certbot python3-certbot-nginx 2>/dev/null || true
+    mrtk_apt_get remove -y certbot python3-certbot python3-certbot-nginx 2>/dev/null || true
   else
     dnf remove -y certbot python3-certbot-nginx 2>/dev/null || true
   fi
@@ -347,8 +349,8 @@ mrtk_install_certbot_package() {
   mrtk_remove_os_certbot_packages
   mrtk_log "installing Certbot with the upstream-recommended snap package"
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends snapd
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends snapd
   else
     mrtk_install_epel_for_snapd
     dnf install -y snapd
@@ -452,8 +454,8 @@ mrtk_configure_rabbitmq_debian_repository() {
   mapfile -t apt_options < <(mrtk_apt_options)
 
   mrtk_log "configuring official Team RabbitMQ apt repositories for ${MRTK_RABBITMQ_DEBIAN_CODENAME}"
-  apt-get "${apt_options[@]}" update
-  apt-get "${apt_options[@]}" install -y --no-install-recommends \
+  mrtk_apt_get "${apt_options[@]}" update
+  mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends \
     curl ca-certificates gnupg apt-transport-https
 
   install -d -m 0755 /etc/apt/keyrings
@@ -470,7 +472,7 @@ deb [arch=amd64 signed-by=/etc/apt/keyrings/rabbitmq-release-signing-key.gpg] ht
 deb [arch=amd64 signed-by=/etc/apt/keyrings/rabbitmq-release-signing-key.gpg] https://deb2.rabbitmq.com/rabbitmq-server/debian/${MRTK_RABBITMQ_DEBIAN_CODENAME} ${MRTK_RABBITMQ_DEBIAN_CODENAME} main
 EOF
 
-  apt-get "${apt_options[@]}" update
+  mrtk_apt_get "${apt_options[@]}" update
 }
 
 mrtk_configure_rabbitmq_rhel_repository() {
@@ -533,7 +535,7 @@ mrtk_install_rabbitmq_package() {
     local erlang_packages=()
     mapfile -t apt_options < <(mrtk_apt_options)
     mapfile -t erlang_packages < <(mrtk_rabbitmq_debian_erlang_packages)
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y \
       "${erlang_packages[@]}" rabbitmq-server
   else
     dnf install -y erlang rabbitmq-server
@@ -554,7 +556,7 @@ mrtk_update_rabbitmq_package() {
     local erlang_packages=()
     mapfile -t apt_options < <(mrtk_apt_options)
     mapfile -t erlang_packages < <(mrtk_rabbitmq_debian_erlang_packages)
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y \
       "${erlang_packages[@]}" rabbitmq-server
   else
     dnf update -y erlang rabbitmq-server
@@ -573,8 +575,8 @@ mrtk_install_openbao_dependencies() {
   mrtk_log "installing OpenBao installer dependencies"
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends ca-certificates curl tar
+    mrtk_apt_get update -y
+    mrtk_apt_get install -y --no-install-recommends ca-certificates curl tar
   else
     dnf install -y ca-certificates curl tar
   fi
@@ -694,8 +696,8 @@ mrtk_ensure_asterisk_build_deps() {
     mrtk_die "Asterisk build dependencies are currently supported on Debian 12/13"
 
   mrtk_log "installing Asterisk build and runtime dependencies from Debian repositories"
-  apt-get update -y
-  apt-get install -y --no-install-recommends \
+  mrtk_apt_get update -y
+  mrtk_apt_get install -y --no-install-recommends \
     build-essential git curl wget ca-certificates gnupg pkg-config autoconf automake \
     libtool bison flex make patch libedit-dev libjansson-dev libxml2-dev libsqlite3-dev \
     uuid-dev libssl-dev libcurl4-openssl-dev libnewt-dev libncurses5-dev libncurses-dev \
@@ -703,7 +705,7 @@ mrtk_ensure_asterisk_build_deps() {
     sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute mtr-tiny netcat-openbsd jq
 
   if apt-cache show asterisk-codec-bcg729 >/dev/null 2>&1; then
-    apt-get install -y --no-install-recommends asterisk-codec-bcg729 ||
+    mrtk_apt_get install -y --no-install-recommends asterisk-codec-bcg729 ||
       mrtk_warn "optional package asterisk-codec-bcg729 could not be installed"
   else
     mrtk_warn "optional package asterisk-codec-bcg729 was not found"
@@ -719,8 +721,8 @@ mrtk_configure_freeswitch_repository() {
   [[ -n "$token" ]] || mrtk_die "SignalWire repository token is required for FreeSWITCH"
 
   mrtk_log "configuring official FreeSWITCH SignalWire repository"
-  apt-get update -y
-  apt-get install -y --no-install-recommends ca-certificates curl gnupg
+  mrtk_apt_get update -y
+  mrtk_apt_get install -y --no-install-recommends ca-certificates curl gnupg
   curl -fsSL https://freeswitch.org/fsget | bash -s "$token" release
 
   if [[ -n "${MNSCLOUD_FREESWITCH_REPO_SUITE:-${FREESWITCH_REPO_SUITE:-}}" ]]; then
@@ -729,7 +731,7 @@ mrtk_configure_freeswitch_repository() {
     sed -i "s/^Suites: .*/Suites: ${suite}/" /etc/apt/sources.list.d/freeswitch.sources
   fi
 
-  apt-get update -y
+  mrtk_apt_get update -y
 }
 
 mrtk_cleanup_freeswitch_packages() {
@@ -737,12 +739,12 @@ mrtk_cleanup_freeswitch_packages() {
   status="$(dpkg-query -W -f='${db:Status-Abbrev}\n' ssmtp freeswitch-mod-voicemail freeswitch-meta-all 2>/dev/null || true)"
   if printf '%s\n' "$status" | grep -Eq '^[ih]?[UF]'; then
     mrtk_warn "cleaning broken optional FreeSWITCH meta packages"
-    DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge \
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get remove -y --purge \
       freeswitch-meta-all freeswitch-mod-voicemail ssmtp || true
   fi
   if dpkg-query -W -f='${db:Status-Abbrev}' freeswitch-mod-g729 >/dev/null 2>&1; then
     mrtk_warn "removing freeswitch-mod-g729 to keep only free G.729 through bcg729"
-    DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge freeswitch-mod-g729 || true
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get remove -y --purge freeswitch-mod-g729 || true
   fi
 }
 
@@ -752,7 +754,7 @@ mrtk_apt_install_optional() {
     mrtk_warn "optional package ${package} not found. Skipping ${description}."
     return 1
   fi
-  apt-get install -y --no-install-recommends "$package" && return 0
+  mrtk_apt_get install -y --no-install-recommends "$package" && return 0
   mrtk_warn "optional package ${package} could not be installed. Skipping ${description}."
   return 1
 }
@@ -777,7 +779,7 @@ mrtk_install_freeswitch_package() {
   fi
 
   mrtk_log "installing FreeSWITCH packages"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  DEBIAN_FRONTEND=noninteractive mrtk_apt_get install -y --no-install-recommends \
     freeswitch freeswitch-systemd freeswitch-conf-vanilla \
     freeswitch-mod-sofia freeswitch-mod-dptools freeswitch-mod-dialplan-xml freeswitch-mod-xml-curl \
     freeswitch-mod-curl freeswitch-mod-commands freeswitch-mod-event-socket \
@@ -820,8 +822,8 @@ mrtk_configure_opensips_repository() {
       *) mrtk_die "OpenSIPS ${version}.x repository is supported only on Debian bookworm" ;;
     esac
     mrtk_log "configuring official OpenSIPS ${version}.x apt repository"
-    apt-get "${apt_options[@]}" update
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
+    mrtk_apt_get "${apt_options[@]}" update
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/opensips.gpg.tmp
     curl -fsSL https://apt.opensips.org/opensips-org.gpg \
@@ -831,7 +833,7 @@ mrtk_configure_opensips_repository() {
     cat > /etc/apt/sources.list.d/opensips.list <<EOF
 deb [signed-by=/usr/share/keyrings/opensips.gpg] https://apt.opensips.org ${codename} ${version}-releases
 EOF
-    apt-get "${apt_options[@]}" update
+    mrtk_apt_get "${apt_options[@]}" update
   else
     local major="$MRTK_TELEPHONY_OS_MAJOR"
     mrtk_log "configuring official OpenSIPS ${version}.x yum repository"
@@ -862,7 +864,7 @@ mrtk_install_opensips_package() {
       -o Dpkg::Options::=--force-confdef
       -o Dpkg::Options::=--force-confold
     )
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends \
       opensips opensips-auth-modules opensips-http-modules opensips-json-module opensips-restclient-module \
       opensips-tls-module sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
       mtr-tiny netcat-openbsd jq ca-certificates curl
@@ -901,8 +903,8 @@ mrtk_configure_kamailio_repository() {
     esac
     local repo_suffix="${version//./}"
     mrtk_log "configuring official Kamailio ${version}.x apt repository"
-    apt-get "${apt_options[@]}" update
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
+    mrtk_apt_get "${apt_options[@]}" update
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
     curl -fsSL -o /usr/share/keyrings/kamailio.asc.tmp https://deb.kamailio.org/kamailiodebkey.gpg
@@ -922,7 +924,7 @@ Package: kamcli
 Pin: origin deb.kamailio.org
 Pin-Priority: 1001
 EOF
-    apt-get "${apt_options[@]}" update
+    mrtk_apt_get "${apt_options[@]}" update
   else
     local major="$MRTK_TELEPHONY_OS_MAJOR"
     mrtk_log "configuring official Kamailio ${version}.x yum repository"
@@ -955,12 +957,12 @@ mrtk_install_kamailio_package() {
       -o Dpkg::Options::=--force-confold
     )
     if [[ "$profile" == "webrtc" ]]; then
-      DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
+      DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends \
         kamailio kamailio-websocket-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-utils-modules kamailio-extra-modules \
         kamailio-outbound-modules kamailio-presence-modules wireshark-common
     else
-      DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends \
+      DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends \
         kamailio kamailio-extra-modules kamailio-utils-modules kamailio-tls-modules \
         kamailio-json-modules kamailio-outbound-modules sngrep tcpdump wireshark-common ngrep dnsutils iputils-ping traceroute \
         mtr-tiny netcat-openbsd jq ca-certificates curl
@@ -1005,8 +1007,8 @@ mrtk_install_mariadb_org_repository() {
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
     local apt_options=()
     mapfile -t apt_options < <(mrtk_apt_options)
-    apt-get "${apt_options[@]}" update
-    apt-get "${apt_options[@]}" install -y curl ca-certificates gnupg apt-transport-https dirmngr
+    mrtk_apt_get "${apt_options[@]}" update
+    mrtk_apt_get "${apt_options[@]}" install -y curl ca-certificates gnupg apt-transport-https dirmngr
   else
     dnf install -y curl ca-certificates
   fi
@@ -1109,9 +1111,9 @@ mrtk_install_mariadb_package() {
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
     local apt_options=()
     mapfile -t apt_options < <(mrtk_apt_options)
-    apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+    mrtk_apt_get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
     mrtk_require_mariadb_candidate_version
-    DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
+    DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y \
       mariadb-server mariadb-client mariadb-backup galera-4
   else
     dnf makecache
@@ -1136,11 +1138,11 @@ mrtk_install_flutter_dependencies() {
   mrtk_log "installing Flutter ${build_profile} build dependencies"
 
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
-    apt-get update -y
+    mrtk_apt_get update -y
     if [[ "$build_profile" == "web" ]]; then
-      apt-get install -y --no-install-recommends ca-certificates curl git unzip xz-utils zip
+      mrtk_apt_get install -y --no-install-recommends ca-certificates curl git unzip xz-utils zip
     else
-      apt-get install -y --no-install-recommends \
+      mrtk_apt_get install -y --no-install-recommends \
         ca-certificates clang cmake curl git libgtk-3-dev liblzma-dev ninja-build \
         pkg-config unzip xz-utils zip
     fi
