@@ -10,10 +10,10 @@
   },
   "channels": {
     "stable": {
-      "version": "0.1.48",
-      "ref": "v0.1.48",
+      "version": "0.1.49",
+      "ref": "v0.1.49",
       "minimumVersion": "0.1.5",
-      "releasedAt": "2026-09-24T22:26:04Z"
+      "releasedAt": "2026-10-03T15:48:09Z"
     },
     "candidate": {
       "version": "0.1.10",
