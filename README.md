@@ -200,6 +200,23 @@ under `channels.<channel>.artifact` in `releases/manifest.json` during the relea
 }
 ```
 
+Static web clients (for example `mnscloud-phoneweb`, `mnscloud-pulse`, and `mnscloud-website`)
+use `scripts/package-static-artifact.sh` as a release validation step. It archives the built
+directory (Flutter `build/web`, Astro `dist/`, ...) with the files at the archive root, writes a
+`<name>.sha256` sidecar, and records the `artifact` metadata above. Upload both files with
+`mrtk_release_prepare --asset-glob` and never commit them:
+
+```bash
+export MNSCLOUD_RUNTIME_KIT_DIR="$RUNTIME_KIT_DIR"
+mrtk_release_prepare ... \
+  --validate 'flutter build web --release --base-href /' \
+  --validate '"$MNSCLOUD_RUNTIME_KIT_DIR/scripts/package-static-artifact.sh" --source-dir build/web --name "mnscloud-demo-web-v$(cat VERSION).tar.gz"' \
+  --asset-glob 'releases/mnscloud-demo-web-v*.tar.gz*'
+```
+
+Repositories that build with Flutter in the release job set `setup_flutter: true` (optionally
+`flutter_channel` / `flutter_version`) on the shared `auto-release.yml` workflow.
+
 Use `--asset-glob` in the repository release script to upload those files to the GitHub Release.
 The shared workflow derives the final HTTPS asset URL from the release tag and sends URL, SHA-256,
 size, and content type to the MNSCloud runtime release cache. Runtime hosts must download and verify

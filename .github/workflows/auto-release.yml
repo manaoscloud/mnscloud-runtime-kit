@@ -32,6 +32,21 @@ on:
         required: false
         type: string
         default: "2.8.1"
+      setup_flutter:
+        description: "Install the Flutter SDK before releasing (for repositories that build web artifacts)."
+        required: false
+        type: boolean
+        default: false
+      flutter_channel:
+        description: "Flutter release channel used when setup_flutter is true."
+        required: false
+        type: string
+        default: "stable"
+      flutter_version:
+        description: "Optional pinned Flutter version used when setup_flutter is true. Empty uses the latest of flutter_channel."
+        required: false
+        type: string
+        default: ""
       checkout_runtime_kit:
         description: "Checkout mnscloud-runtime-kit for repositories that consume the shared release helper."
         required: false
@@ -130,6 +145,14 @@ jobs:
       - name: Install Node.js dependencies
         if: ${{ inputs.setup_node }}
         run: npm ci
+
+      - name: Setup Flutter
+        if: ${{ inputs.setup_flutter }}
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter_channel }}
+          flutter-version: ${{ inputs.flutter_version }}
+          cache: true
 
       - name: Configure git author
         run: |
