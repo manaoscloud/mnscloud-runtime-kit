@@ -222,7 +222,7 @@ jobs:
               "mnscloud-openvault",
               "mnscloud-rabbitmq",
               "mnscloud-workers",
-              "mnscloud-freeradius",
+              "mnscloud-authentication",
               "mnscloud-freeswitch",
               "mnscloud-asterisk",
               "mnscloud-opensips-sbc",

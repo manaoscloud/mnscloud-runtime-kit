@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|basic-auth-utils>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|freeradius|basic-auth-utils>]
 EOF
 }
 
@@ -162,6 +162,12 @@ check_kamailio() {
   fi
 }
 
+check_freeradius() {
+  local binary
+  binary="$(command -v freeradius || command -v radiusd || true)"
+  if [[ -n "$binary" ]]; then "$binary" -v; else mrtk_warn "FreeRADIUS not installed"; fi
+}
+
 check_basic_auth_utils() {
   if command -v htpasswd >/dev/null 2>&1; then
     mrtk_log "htpasswd=$(command -v htpasswd)"
@@ -186,6 +192,7 @@ case "$TOOL" in
     check_freeswitch
     check_opensips
     check_kamailio
+    check_freeradius
     check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
@@ -200,6 +207,7 @@ case "$TOOL" in
   freeswitch) check_freeswitch ;;
   opensips) check_opensips ;;
   kamailio) check_kamailio ;;
+  freeradius) check_freeradius ;;
   basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

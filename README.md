@@ -67,6 +67,7 @@ Current installers:
   package set.
 - `kamailio`: configures the official Kamailio package repository and installs either the core or
   WebRTC package set, selected by `MNSCLOUD_KAMAILIO_PACKAGE_PROFILE`.
+- `freeradius`: installs the network authentication engine and MariaDB client from signed OS repositories; requires version 3.2.5 or newer and fails closed on older distribution packages.
 - `coturn`: installs coturn and supporting utilities for dedicated TURN/STUN media edge modules.
 - `basic-auth-utils`: installs the `htpasswd` utility used by edge/admin proxy modules.
 - `mariadb`: configures the official MariaDB repository for `MNSCLOUD_MARIADB_VERSION` and installs
