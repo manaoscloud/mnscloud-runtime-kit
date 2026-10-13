@@ -177,7 +177,8 @@ Configure repository or organization secrets/variables:
 
 After publishing the GitHub Release, the shared workflow posts the release
 metadata to `/api/v1/runtime/releases/publish`; the API validates the token and
-updates the DB-backed runtime release cache.
+updates the DB-backed runtime release cache. The `buildRef` is the full 40-character
+commit resolved from the published tag, so installers can verify immutable source.
 
 The shared workflow publishes release metadata to the control plane. After synchronizing the
 release cache, the API queues the Agent-backed runtime rollout from the same release publish
