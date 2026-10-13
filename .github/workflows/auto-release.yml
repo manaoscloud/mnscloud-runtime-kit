@@ -206,6 +206,7 @@ jobs:
           python3 - <<'PY' > /tmp/mnscloud-release-payload.json
           import json
           import os
+          import re
           import subprocess
 
           version = os.environ["RELEASE_VERSION"]
@@ -245,7 +246,9 @@ jobs:
           build_ref = subprocess.check_output(
               ["git", "rev-list", "-n", "1", ref],
               text=True,
-          ).strip()[:12]
+          ).strip()
+          if not re.fullmatch(r"[a-f0-9]{40}", build_ref):
+              raise SystemExit("Release tag did not resolve to a full commit SHA")
           print(json.dumps({
               "product": product,
               "channel": channel,
