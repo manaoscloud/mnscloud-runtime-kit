@@ -13,7 +13,8 @@ SPEC = importlib.util.spec_from_file_location("env_reconcile", Path(__file__).re
 m = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = m
 SPEC.loader.exec_module(m)
-RULES = (m.Rule("SHARED_KEY", "initialize"), m.Rule("HANDLERS", "add-set"), m.Rule("SETTING", "managed"))
+RULES = (m.Rule("SHARED_KEY", "initialize"), m.Rule("HANDLERS", "add-set"), m.Rule("SETTING", "managed"),
+         m.Rule("OPTIONAL", "managed-optional"))
 
 
 class CandidateTests(unittest.TestCase):
@@ -35,6 +36,23 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(m.ReconcileError, '^LOCAL_DRIFT_CONFLICT$'):
             m.candidate(b'SETTING=local\n', RULES, {"SETTING": "new"}, {"SETTING": "old"})
         self.assertEqual(m.candidate(b'SETTING=old\n', RULES, {"SETTING": "new"}, {"SETTING": "old"}), b'SETTING=new\n')
+
+    def test_managed_optional_sets_and_removes_with_drift_check(self):
+        source = b'# keep\nOPTIONAL=/old/\nOTHER=1\n'
+        removed = m.candidate(source, RULES, {"OPTIONAL": ""}, {"OPTIONAL": "/old/"})
+        self.assertEqual(removed, b'# keep\nOTHER=1\n')
+        # Removing an absent key and re-adding it are idempotent, unrelated lines stay untouched.
+        self.assertEqual(m.candidate(removed, RULES, {"OPTIONAL": ""}), removed)
+        self.assertEqual(m.candidate(removed, RULES, {"OPTIONAL": "/new/"}), b'# keep\nOTHER=1\nOPTIONAL=/new/\n')
+        with self.assertRaisesRegex(m.ReconcileError, '^LOCAL_DRIFT_CONFLICT$'):
+            m.candidate(source, RULES, {"OPTIONAL": ""}, {"OPTIONAL": "/other/"})
+        with self.assertRaisesRegex(m.ReconcileError, '^LOCAL_DRIFT_CONFLICT$'):
+            m.candidate(source, RULES, {"OPTIONAL": ""})
+
+    def test_empty_value_only_for_managed_optional(self):
+        for key in ("SHARED_KEY", "HANDLERS", "SETTING"):
+            with self.subTest(key=key), self.assertRaisesRegex(m.ReconcileError, '^UNSUPPORTED_DESIRED_VALUE$'):
+                m.candidate(b'', RULES, {key: ""})
 
     def test_rejects_duplicates_unknown_keys_and_injections(self):
         cases = [

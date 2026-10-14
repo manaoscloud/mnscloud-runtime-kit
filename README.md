@@ -232,7 +232,9 @@ field rules, validation, Agent assignment/lease checks, and service activation/r
 No network requests or service commands are executed by the library.
 
 Supported operations are initialize-if-empty (conflicting existing values are rejected),
-three-way managed values with an explicit baseline, and additive comma-separated sets.
+three-way managed values with an explicit baseline, optional managed values
+(`managed-optional`: same baseline check, and an empty desired value removes the key), and
+additive comma-separated sets.
 Unknown fields/comments are preserved. Only a deliberately restricted single-line literal
 subset of environment syntax is accepted; unsupported quotes, expansions in managed values,
 multiline values, duplicate managed fields and ambiguous files fail closed.
