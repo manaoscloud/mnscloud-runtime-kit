@@ -27,7 +27,7 @@ class ReconcileError(Exception):
 @dataclass(frozen=True)
 class Rule:
     key: str
-    mode: str  # initialize, managed, or add-set
+    mode: str  # initialize, managed, managed-optional, or add-set
 
 
 def candidate(source: bytes, rules: tuple[Rule, ...], desired: dict[str, str],
@@ -44,11 +44,13 @@ def candidate(source: bytes, rules: tuple[Rule, ...], desired: dict[str, str],
     allowed = {rule.key: rule.mode for rule in rules}
     if len(allowed) != len(rules) or any(not KEY.fullmatch(k) for k in allowed):
         raise ReconcileError("INVALID_ADAPTER_RULES")
-    if any(mode not in ("initialize", "managed", "add-set") for mode in allowed.values()):
+    if any(mode not in ("initialize", "managed", "managed-optional", "add-set") for mode in allowed.values()):
         raise ReconcileError("INVALID_ADAPTER_RULES")
     if not isinstance(desired, dict) or not desired or set(desired) - allowed.keys():
         raise ReconcileError("UNKNOWN_MANAGED_FIELD")
-    if any(not isinstance(v, str) or not v or not VALUE.fullmatch(v) for v in desired.values()):
+    # Only managed-optional fields accept an empty value, which removes the key.
+    if any(not isinstance(v, str) or not VALUE.fullmatch(v)
+           or (not v and allowed[k] != "managed-optional") for k, v in desired.items()):
         raise ReconcileError("UNSUPPORTED_DESIRED_VALUE")
     lines = content.splitlines(keepends=True)
     current: dict[str, tuple[int, str]] = {}
@@ -90,8 +92,11 @@ def candidate(source: bytes, rules: tuple[Rule, ...], desired: dict[str, str],
             continue
         if mode == "initialize" and old:
             raise ReconcileError("EXISTING_VALUE_CONFLICT")
-        if mode == "managed" and old and (baseline is None or baseline.get(key) != old):
+        if mode in ("managed", "managed-optional") and old and (baseline is None or baseline.get(key) != old):
             raise ReconcileError("LOCAL_DRIFT_CONFLICT")
+        if not wanted:
+            lines[current[key][0]] = ""
+            continue
         replacement = key + "=" + wanted + "\n"
         if key in current:
             lines[current[key][0]] = replacement
