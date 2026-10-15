@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 class ReleaseCommitTest(unittest.TestCase):
     def payload(self, commit):
-        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/auto-release.yml').read_text()
-        block = workflow.split("python3 - <<'PY' > /tmp/mnscloud-release-payload.json\n", 1)[1].split('\n          PY', 1)[0]
+        script = (Path(__file__).resolve().parents[1] / 'scripts/notify-release-cache.sh').read_text()
+        block = script.split("python3 - > \"$payload\" <<'PY'\n", 1)[1].split('\nPY\n', 1)[0]
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             manifest = root / 'manifest.json'
@@ -32,6 +32,11 @@ class ReleaseCommitTest(unittest.TestCase):
     def test_publishes_full_tag_commit(self):
         commit = '1234567890abcdef' * 2 + '12345678'
         self.assertEqual(self.payload(commit)['buildRef'], commit)
+
+    def test_web_clients_are_managed_products(self):
+        script = (Path(__file__).resolve().parents[1] / 'scripts/notify-release-cache.sh').read_text()
+        for product in ('mnscloud-phoneweb', 'mnscloud-pulse', 'mnscloud-customer-portal', 'mnscloud-website'):
+            self.assertIn(f'"{product}"', script)
 
     def test_rejects_abbreviated_commit(self):
         with self.assertRaisesRegex(SystemExit, 'full commit SHA'):
