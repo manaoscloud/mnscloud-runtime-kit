@@ -54,6 +54,7 @@ supported_products = {
     # Web clients installed as apps by mnscloud-webapps (versioned products of their own).
     "mnscloud-phoneweb",
     "mnscloud-pulse",
+    "mnscloud-pos",
     "mnscloud-customer-portal",
     "mnscloud-website",
 }
