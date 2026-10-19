@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|freeradius|basic-auth-utils>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|freeradius|clickhouse|vector|basic-auth-utils>]
 EOF
 }
 
@@ -168,6 +168,18 @@ check_freeradius() {
   if [[ -n "$binary" ]]; then "$binary" -v; else mrtk_warn "FreeRADIUS not installed"; fi
 }
 
+check_clickhouse() {
+  if command -v clickhouse-server >/dev/null 2>&1; then
+    dpkg-query -W -f='clickhouse-server ${Version}\n' clickhouse-server 2>/dev/null || true
+  else
+    mrtk_warn "ClickHouse not installed"
+  fi
+}
+
+check_vector() {
+  if command -v vector >/dev/null 2>&1; then vector --version; else mrtk_warn "Vector not installed"; fi
+}
+
 check_basic_auth_utils() {
   if command -v htpasswd >/dev/null 2>&1; then
     mrtk_log "htpasswd=$(command -v htpasswd)"
@@ -193,6 +205,8 @@ case "$TOOL" in
     check_opensips
     check_kamailio
     check_freeradius
+    check_clickhouse
+    check_vector
     check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
@@ -208,6 +222,8 @@ case "$TOOL" in
   opensips) check_opensips ;;
   kamailio) check_kamailio ;;
   freeradius) check_freeradius ;;
+  clickhouse) check_clickhouse ;;
+  vector) check_vector ;;
   basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac

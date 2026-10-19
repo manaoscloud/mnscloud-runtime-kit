@@ -1226,3 +1226,89 @@ mrtk_ensure_flutter() {
   mrtk_install_or_update_flutter
   command -v flutter >/dev/null 2>&1 || mrtk_die "Flutter installation failed"
 }
+
+# Signed third-party APT repository whose key must match a pinned primary fingerprint.
+mrtk_install_pinned_apt_repository() {
+  local name="$1" key_url="$2" fingerprint="$3" source_line="$4"
+  local keyring="/usr/share/keyrings/mnscloud-${name}.gpg" temp actual
+  mrtk_apt_get update -y
+  mrtk_apt_get install -y curl gnupg ca-certificates
+  temp="$(mktemp)"
+  curl -fsSL "$key_url" -o "$temp" || { rm -f "$temp"; mrtk_die "${name} signing key download failed"; }
+  actual="$(gpg --show-keys --with-colons "$temp" 2>/dev/null | awk -F: '$1 == "fpr" {print $10; exit}')"
+  if [[ "$actual" != "$fingerprint" ]]; then
+    rm -f "$temp"
+    mrtk_die "${name} signing key fingerprint mismatch; refusing the package source"
+  fi
+  gpg --dearmor < "$temp" > "${keyring}.tmp"
+  rm -f "$temp"
+  chmod 0644 "${keyring}.tmp"
+  mv "${keyring}.tmp" "$keyring"
+  printf 'deb [signed-by=%s] %s\n' "$keyring" "$source_line" > "/etc/apt/sources.list.d/mnscloud-${name}.list"
+}
+
+# Hold a package set to one homologated release series (for example 26.8.*).
+mrtk_pin_package_series() {
+  local name="$1" packages="$2" series="$3"
+  cat > "/etc/apt/preferences.d/mnscloud-${name}" <<PIN
+Package: ${packages}
+Pin: version ${series}.*
+Pin-Priority: 1001
+PIN
+}
+
+mrtk_require_series() {
+  local label="$1" version="$2" series="$3"
+  [[ "$version" == "${series}."* ]] || mrtk_die "${label} ${version:-unknown} is outside the homologated series ${series}"
+}
+
+# ClickHouse official x86 builds target x86-64-v3 since 26.6; LTS has no compatibility build.
+mrtk_clickhouse_cpu_supported() {
+  local arch flags flag
+  arch="$(uname -m)"
+  [[ "$arch" == aarch64 ]] && return 0
+  [[ "$arch" == x86_64 ]] || return 1
+  flags=" $(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2) "
+  for flag in avx2 bmi1 bmi2 fma movbe f16c abm xsave; do
+    [[ "$flags" == *" ${flag} "* ]] || return 1
+  done
+}
+
+mrtk_ensure_clickhouse() {
+  local series="${MNSCLOUD_CLICKHOUSE_SERIES:-26.8}" version
+  [[ "$series" =~ ^[0-9]+\.[0-9]+$ ]] || mrtk_die "invalid ClickHouse series"
+  mrtk_detect_os
+  [[ "$MRTK_OS_FAMILY" == "debian" ]] || mrtk_die "ClickHouse is homologated on Debian 12/13 only"
+  if [[ "${MNSCLOUD_CLICKHOUSE_SKIP_CPU_CHECK:-0}" != 1 ]]; then
+    mrtk_clickhouse_cpu_supported ||
+      mrtk_die "this CPU lacks x86-64-v3 (AVX2/BMI2/FMA/MOVBE) required by ClickHouse ${series}; use a vCPU type with AVX2 (host or x86-64-v3) or arm64"
+  fi
+  mrtk_install_pinned_apt_repository clickhouse \
+    https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key \
+    3A9EA1193A97B548BE1457D48919F6BD2B48D754 \
+    'https://packages.clickhouse.com/deb lts main'
+  mrtk_pin_package_series clickhouse 'clickhouse-server clickhouse-client clickhouse-common-static' "$series"
+  mrtk_apt_get update -y
+  mrtk_apt_get install -y clickhouse-server clickhouse-client clickhouse-common-static
+  version="$(dpkg-query -W -f='${Version}' clickhouse-server 2>/dev/null || true)"
+  mrtk_require_series ClickHouse "$version" "$series"
+  mrtk_log "ClickHouse ${version} installed"
+}
+
+mrtk_ensure_vector() {
+  local series="${MNSCLOUD_VECTOR_SERIES:-0.59}" version
+  [[ "$series" =~ ^[0-9]+\.[0-9]+$ ]] || mrtk_die "invalid Vector series"
+  mrtk_detect_os
+  [[ "$MRTK_OS_FAMILY" == "debian" ]] || mrtk_die "Vector is homologated on Debian 12/13 only"
+  # Datadog APT key (2023-04-20, expires 2028-04-19) signs the Vector repository.
+  mrtk_install_pinned_apt_repository vector \
+    https://keys.datadoghq.com/DATADOG_APT_KEY_C0962C7D.public \
+    5F1E256061D813B125E156E8E6266D4AC0962C7D \
+    'https://apt.vector.dev/ stable vector-0'
+  mrtk_pin_package_series vector vector "$series"
+  mrtk_apt_get update -y
+  mrtk_apt_get install -y vector
+  version="$(dpkg-query -W -f='${Version}' vector 2>/dev/null || true)"
+  mrtk_require_series Vector "$version" "$series"
+  mrtk_log "Vector ${version} installed"
+}
