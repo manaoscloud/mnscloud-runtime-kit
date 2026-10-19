@@ -1297,7 +1297,9 @@ mrtk_ensure_clickhouse() {
     'https://packages.clickhouse.com/deb lts main'
   mrtk_pin_package_series clickhouse 'clickhouse-server clickhouse-client clickhouse-common-static' "$series"
   mrtk_apt_get update -y
-  mrtk_apt_get install -y clickhouse-server clickhouse-client clickhouse-common-static
+  # Non-interactive: the package asks for a default-user password on a terminal unless one is already
+  # configured (the Logs runtime pre-creates a discarded random one and then removes that user).
+  DEBIAN_FRONTEND=noninteractive mrtk_apt_get install -y -o Dpkg::Options::=--force-confold clickhouse-server clickhouse-client clickhouse-common-static </dev/null
   version="$(dpkg-query -W -f='${Version}' clickhouse-server 2>/dev/null || true)"
   mrtk_require_series ClickHouse "$version" "$series"
   mrtk_log "ClickHouse ${version} installed"
@@ -1315,7 +1317,7 @@ mrtk_ensure_vector() {
     'https://apt.vector.dev/ stable vector-0'
   mrtk_pin_package_series vector vector "$series"
   mrtk_apt_get update -y
-  mrtk_apt_get install -y vector
+  DEBIAN_FRONTEND=noninteractive mrtk_apt_get install -y vector </dev/null
   version="$(dpkg-query -W -f='${Version}' vector 2>/dev/null || true)"
   mrtk_require_series Vector "$version" "$series"
   mrtk_log "Vector ${version} installed"
