@@ -44,6 +44,7 @@ supported_products = {
     "mnscloud-rabbitmq",
     "mnscloud-workers",
     "mnscloud-authentication",
+    "mnscloud-logs",
     "mnscloud-freeswitch",
     "mnscloud-asterisk",
     "mnscloud-opensips-sbc",
