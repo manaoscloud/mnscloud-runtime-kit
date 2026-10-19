@@ -35,7 +35,7 @@ class ReleaseCommitTest(unittest.TestCase):
 
     def test_web_clients_are_managed_products(self):
         script = (Path(__file__).resolve().parents[1] / 'scripts/notify-release-cache.sh').read_text()
-        for product in ('mnscloud-phoneweb', 'mnscloud-pulse', 'mnscloud-customer-portal', 'mnscloud-website'):
+        for product in ('mnscloud-phoneweb', 'mnscloud-pulse', 'mnscloud-pos', 'mnscloud-customer-portal', 'mnscloud-website'):
             self.assertIn(f'"{product}"', script)
 
     def test_rejects_abbreviated_commit(self):
