@@ -1262,27 +1262,35 @@ mrtk_require_series() {
   [[ "$version" == "${series}."* ]] || mrtk_die "${label} ${version:-unknown} is outside the homologated series ${series}"
 }
 
-# ClickHouse official x86 builds target x86-64-v3 since 26.6; LTS has no compatibility build.
+# x86 microarchitecture level an official ClickHouse series needs: x86-64-v3 (AVX2) from 26.6 on,
+# x86-64-v2 (SSE4.2/POPCNT) before. LTS series have no compatibility build.
+mrtk_clickhouse_x86_level() {
+  local major="${1%%.*}" minor="${1#*.}"
+  if (( major > 26 || (major == 26 && minor >= 6) )); then printf 'v3\n'; else printf 'v2\n'; fi
+}
+
 mrtk_clickhouse_cpu_supported() {
-  local arch flags flag
+  local level="$1" arch flags flag required
   arch="$(uname -m)"
   [[ "$arch" == aarch64 ]] && return 0
   [[ "$arch" == x86_64 ]] || return 1
   flags=" $(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2) "
-  for flag in avx2 bmi1 bmi2 fma movbe f16c abm xsave; do
+  required='ssse3 sse4_1 sse4_2 popcnt cx16'
+  [[ "$level" == v3 ]] && required="$required avx2 bmi1 bmi2 fma movbe f16c abm xsave"
+  for flag in $required; do
     [[ "$flags" == *" ${flag} "* ]] || return 1
   done
 }
 
 mrtk_ensure_clickhouse() {
-  local series="${MNSCLOUD_CLICKHOUSE_SERIES:-26.8}" version
+  # 26.3 LTS (x86-64-v2) runs on every platform hypervisor node; 26.6+ official builds need AVX2.
+  local series="${MNSCLOUD_CLICKHOUSE_SERIES:-26.3}" version level
   [[ "$series" =~ ^[0-9]+\.[0-9]+$ ]] || mrtk_die "invalid ClickHouse series"
   mrtk_detect_os
   [[ "$MRTK_OS_FAMILY" == "debian" ]] || mrtk_die "ClickHouse is homologated on Debian 12/13 only"
-  if [[ "${MNSCLOUD_CLICKHOUSE_SKIP_CPU_CHECK:-0}" != 1 ]]; then
-    mrtk_clickhouse_cpu_supported ||
-      mrtk_die "this CPU lacks x86-64-v3 (AVX2/BMI2/FMA/MOVBE) required by ClickHouse ${series}; use a vCPU type with AVX2 (host or x86-64-v3) or arm64"
-  fi
+  level="$(mrtk_clickhouse_x86_level "$series")"
+  mrtk_clickhouse_cpu_supported "$level" ||
+    mrtk_die "this CPU lacks x86-64-${level} required by ClickHouse ${series}; use a vCPU type that exposes it (x86-64-${level} or host) or arm64"
   mrtk_install_pinned_apt_repository clickhouse \
     https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key \
     3A9EA1193A97B548BE1457D48919F6BD2B48D754 \
