@@ -1357,7 +1357,7 @@ mrtk_ensure_powerdns_component() {
   mrtk_install_pinned_apt_repository "$name" \
     https://repo.powerdns.com/FD380FBB-pub.asc \
     "$MRTK_POWERDNS_KEY_FINGERPRINT" \
-    "http://repo.powerdns.com/debian ${MRTK_OS_VERSION_CODENAME}-${train}-${series//./} main"
+    "https://repo.powerdns.com/debian ${MRTK_OS_VERSION_CODENAME}-${train}-${series//./} main"
   # Debian ships older series of the same packages: the pin keeps only the homologated one.
   mrtk_pin_package_series "$name" "$packages" "$series"
   mrtk_apt_get update -y
@@ -1368,19 +1368,23 @@ mrtk_ensure_powerdns_component() {
     mrtk_require_series "$label" "$version" "$series"
   done
   mrtk_log "${label} ${version} installed (services not started)"
+  return 0
 }
 
 mrtk_ensure_pdns_auth() {
   mrtk_ensure_powerdns_component powerdns-auth auth "${MNSCLOUD_PDNS_AUTH_SERIES:-5.1}" \
     'pdns-server pdns-backend-lmdb' 'PowerDNS Authoritative'
+  return $?
 }
 
 mrtk_ensure_pdns_recursor() {
   mrtk_ensure_powerdns_component powerdns-recursor rec "${MNSCLOUD_PDNS_RECURSOR_SERIES:-5.4}" \
     'pdns-recursor' 'PowerDNS Recursor'
+  return $?
 }
 
 mrtk_ensure_dnsdist() {
   mrtk_ensure_powerdns_component powerdns-dnsdist dnsdist "${MNSCLOUD_DNSDIST_SERIES:-2.1}" \
     'dnsdist' 'dnsdist'
+  return $?
 }
