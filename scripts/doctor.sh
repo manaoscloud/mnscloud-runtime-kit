@@ -8,7 +8,7 @@ source "${ROOT_DIR}/lib/packages.sh"
 
 usage() {
   cat <<EOF
-Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|freeradius|clickhouse|vector|basic-auth-utils>]
+Usage: scripts/doctor.sh [--tool <nginx|flutter|mariadb|deno|nodejs|docker|certbot|rabbitmq|asterisk|freeswitch|opensips|kamailio|freeradius|clickhouse|vector|pdns-auth|pdns-recursor|dnsdist|basic-auth-utils>]
 EOF
 }
 
@@ -180,6 +180,15 @@ check_vector() {
   if command -v vector >/dev/null 2>&1; then vector --version; else mrtk_warn "Vector not installed"; fi
 }
 
+check_powerdns_package() {
+  local package="$1"
+  if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+    dpkg-query -W -f="${package} \${Version}\n" "$package"
+  else
+    mrtk_warn "${package} not installed"
+  fi
+}
+
 check_basic_auth_utils() {
   if command -v htpasswd >/dev/null 2>&1; then
     mrtk_log "htpasswd=$(command -v htpasswd)"
@@ -207,6 +216,9 @@ case "$TOOL" in
     check_freeradius
     check_clickhouse
     check_vector
+    check_powerdns_package pdns-server
+    check_powerdns_package pdns-recursor
+    check_powerdns_package dnsdist
     check_basic_auth_utils
     ;;
   nginx) check_nginx ;;
@@ -224,6 +236,9 @@ case "$TOOL" in
   freeradius) check_freeradius ;;
   clickhouse) check_clickhouse ;;
   vector) check_vector ;;
+  pdns-auth) check_powerdns_package pdns-server ;;
+  pdns-recursor) check_powerdns_package pdns-recursor ;;
+  dnsdist) check_powerdns_package dnsdist ;;
   basic-auth-utils) check_basic_auth_utils ;;
   *) mrtk_die "unsupported tool: $TOOL" ;;
 esac
