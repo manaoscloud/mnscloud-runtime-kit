@@ -1322,3 +1322,69 @@ mrtk_ensure_vector() {
   mrtk_require_series Vector "$version" "$series"
   mrtk_log "Vector ${version} installed"
 }
+
+# Package units must not start with their packaged default configuration (the authoritative server
+# would listen on every address): installers that only install run apt behind a deny-all policy-rc.d.
+mrtk_apt_install_without_starting() {
+  local policy=/usr/sbin/policy-rc.d created=0 status=0
+  if [[ ! -e "$policy" ]]; then
+    printf '#!/bin/sh\n# mnscloud-runtime-kit: package installation in progress, do not start services\nexit 101\n' > "$policy"
+    chmod 0755 "$policy"
+    created=1
+  fi
+  DEBIAN_FRONTEND=noninteractive mrtk_apt_get install -y -o Dpkg::Options::=--force-confold "$@" </dev/null || status=$?
+  (( created == 1 )) && rm -f "$policy"
+  return "$status"
+}
+
+# PowerDNS release key (FD380FBB, "PowerDNS Release Signing Key") signs every repo.powerdns.com
+# release train; each component has its own train (<codename>-auth-51, -rec-54, -dnsdist-21).
+MRTK_POWERDNS_KEY_FINGERPRINT=9FAAA5577E8FCF62093D036C1B0C6205FD380FBB
+
+mrtk_ensure_powerdns_component() {
+  local name="$1" train="$2" series="$3" packages="$4" label="$5" version package
+  [[ "$series" =~ ^[0-9]+\.[0-9]+$ ]] || mrtk_die "invalid ${label} series"
+  mrtk_detect_os
+  [[ "$MRTK_OS_FAMILY" == "debian" ]] || mrtk_die "${label} is homologated on Debian 12/13 only"
+  case "$MRTK_OS_VERSION_CODENAME" in
+    bookworm|trixie) ;;
+    *) mrtk_die "${label} is homologated on Debian 12 (bookworm) and 13 (trixie) only" ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|aarch64) ;;
+    *) mrtk_die "${label} packages exist for amd64 and arm64 only (use a 64-bit OS)" ;;
+  esac
+  mrtk_install_pinned_apt_repository "$name" \
+    https://repo.powerdns.com/FD380FBB-pub.asc \
+    "$MRTK_POWERDNS_KEY_FINGERPRINT" \
+    "https://repo.powerdns.com/debian ${MRTK_OS_VERSION_CODENAME}-${train}-${series//./} main"
+  # Debian ships older series of the same packages: the pin keeps only the homologated one.
+  mrtk_pin_package_series "$name" "$packages" "$series"
+  mrtk_apt_get update -y
+  # shellcheck disable=SC2086
+  mrtk_apt_install_without_starting $packages
+  for package in $packages; do
+    version="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
+    mrtk_require_series "$label" "$version" "$series"
+  done
+  mrtk_log "${label} ${version} installed (services not started)"
+  return 0
+}
+
+mrtk_ensure_pdns_auth() {
+  mrtk_ensure_powerdns_component powerdns-auth auth "${MNSCLOUD_PDNS_AUTH_SERIES:-5.1}" \
+    'pdns-server pdns-backend-lmdb' 'PowerDNS Authoritative'
+  return $?
+}
+
+mrtk_ensure_pdns_recursor() {
+  mrtk_ensure_powerdns_component powerdns-recursor rec "${MNSCLOUD_PDNS_RECURSOR_SERIES:-5.4}" \
+    'pdns-recursor' 'PowerDNS Recursor'
+  return $?
+}
+
+mrtk_ensure_dnsdist() {
+  mrtk_ensure_powerdns_component powerdns-dnsdist dnsdist "${MNSCLOUD_DNSDIST_SERIES:-2.1}" \
+    'dnsdist' 'dnsdist'
+  return $?
+}

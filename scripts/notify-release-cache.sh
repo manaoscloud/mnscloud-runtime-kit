@@ -45,6 +45,7 @@ supported_products = {
     "mnscloud-workers",
     "mnscloud-authentication",
     "mnscloud-logs",
+    "mnscloud-dns",
     "mnscloud-freeswitch",
     "mnscloud-asterisk",
     "mnscloud-opensips-sbc",
