@@ -173,7 +173,10 @@ console.log(manifest.channels?.[channel]?.releasedAt ?? "");
       done
     done
     shopt -u nullglob
-    git push origin main
+    # MRTK_RELEASE_TAG_ONLY=1 (protected main): only the tag goes; its commit carries the metadata.
+    if [[ "${MRTK_RELEASE_TAG_ONLY:-0}" != "1" ]]; then
+      git push origin main
+    fi
     git push origin "$tag"
     if gh release view "$tag" --repo "$repository" >/dev/null 2>&1; then
       mrtk_release_log "GitHub Release already exists: ${tag}"

@@ -41,3 +41,20 @@ class ReleaseCommitTest(unittest.TestCase):
     def test_rejects_abbreviated_commit(self):
         with self.assertRaisesRegex(SystemExit, 'full commit SHA'):
             self.payload('1234567890ab')
+
+
+class TagOnlyReleaseTest(unittest.TestCase):
+    """Protected main: the release pushes only its tag and increments from the latest tag."""
+
+    def test_publish_skips_main_push_when_tag_only(self):
+        script = (Path(__file__).resolve().parents[1] / 'lib/release.sh').read_text()
+        guarded = script.split('if [[ "${MRTK_RELEASE_TAG_ONLY:-0}" != "1" ]]; then', 1)
+        self.assertEqual(len(guarded), 2)
+        self.assertTrue(guarded[1].lstrip().startswith('git push origin main'))
+        self.assertIn('git push origin "$tag"', guarded[1])
+
+    def test_workflow_passes_tag_only_and_reads_latest_tag(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/auto-release.yml').read_text()
+        self.assertIn('tag_only:', workflow)
+        self.assertIn("MRTK_RELEASE_TAG_ONLY: ${{ inputs.tag_only && '1' || '0' }}", workflow)
+        self.assertIn("git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname", workflow)

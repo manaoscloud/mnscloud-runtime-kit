@@ -222,6 +222,10 @@ mrtk_release_prepare ... \
 Repositories that build with Flutter in the release job set `setup_flutter: true` (optionally
 `flutter_channel` / `flutter_version`) on the shared `auto-release.yml` workflow.
 
+Repositories whose `main` is protected (pull request and status checks required) set
+`tag_only: true`: the release commit (VERSION, manifest) is pushed only as the annotated tag, never to
+`main`, and the next patch version comes from the latest `vX.Y.Z` tag instead of `VERSION`.
+
 Use `--asset-glob` in the repository release script to upload those files to the GitHub Release.
 The shared workflow derives the final HTTPS asset URL from the release tag and sends URL, SHA-256,
 size, and content type to the MNSCloud runtime release cache. Runtime hosts must download and verify
