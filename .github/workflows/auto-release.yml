@@ -57,6 +57,11 @@ on:
         required: false
         type: string
         default: "main"
+      tag_only:
+        description: "Protected main: publish only the release tag (its commit carries the metadata) and increment from the latest tag instead of VERSION."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -178,6 +183,11 @@ jobs:
             version="$requested"
           else
             current="$(tr -d '[:space:]' < VERSION)"
+            if [ "${{ inputs.tag_only }}" = "true" ]; then
+              # main never receives the release commit: the latest x.y.z tag is the current version.
+              latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 | sed 's/^v//')"
+              [ -z "$latest" ] || current="$latest"
+            fi
             IFS='.' read -r major minor patch_extra <<< "$current"
             patch="${patch_extra%%[-+]*}"
             if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
@@ -195,6 +205,7 @@ jobs:
       - name: Publish release
         env:
           MNSCLOUD_RUNTIME_KIT_DIR: ${{ github.workspace }}/.mnscloud-runtime-kit
+          MRTK_RELEASE_TAG_ONLY: ${{ inputs.tag_only && '1' || '0' }}
         run: |
           set -euo pipefail
           bash "${{ inputs.release_script }}" --version "${{ steps.version.outputs.version }}" --publish
