@@ -122,7 +122,7 @@ jobs:
           mkdir -p "$install_dir"
 
           for attempt in 1 2 3 4 5; do
-            if curl -fL --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
+            if curl --proto '=https' --tlsv1.2 -fL --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
               -o "$archive" "$url"; then
               break
             fi
@@ -158,11 +158,11 @@ jobs:
 
       - name: Install Node.js dependencies
         if: ${{ inputs.setup_node }}
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Setup Flutter
         if: ${{ inputs.setup_flutter }}
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ inputs.flutter_channel }}
           flutter-version: ${{ inputs.flutter_version }}
