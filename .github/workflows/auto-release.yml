@@ -185,7 +185,9 @@ jobs:
             current="$(tr -d '[:space:]' < VERSION)"
             if [ "${{ inputs.tag_only }}" = "true" ]; then
               # main never receives the release commit: the latest x.y.z tag is the current version.
-              latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 | sed 's/^v//')"
+              # sed reads every line: `head` would close the pipe early and, under pipefail, a long
+              # tag list fails the step with SIGPIPE (exit 141).
+              latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | sed -n '1s/^v//p')"
               [ -z "$latest" ] || current="$latest"
             fi
             IFS='.' read -r major minor patch_extra <<< "$current"
