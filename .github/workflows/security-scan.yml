@@ -98,7 +98,7 @@ jobs:
           git init -q "$rules"
           git -C "$rules" fetch -q --depth 1 https://github.com/opengrep/opengrep-rules "$OPENGREP_RULES_SHA"
           git -C "$rules" checkout -q FETCH_HEAD
-          args=(scan --quiet)
+          args=(scan)
           for dir in $RULE_DIRS; do
             [[ "$dir" =~ ^[a-z_]+$ && -d "${rules}/${dir}" ]] || { echo "unknown rule directory: $dir" >&2; exit 1; }
             args+=(--config "${rules}/${dir}")
