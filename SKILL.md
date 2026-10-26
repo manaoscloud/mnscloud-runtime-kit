@@ -22,8 +22,8 @@ MNSCloud service modules.
 - Do not update consumers to a runtime-kit ref until the matching release commit,
   Git tag, and GitHub Release exist on GitHub.
 - Operator-visible runtime-kit releases are published by the repository
-  `Release` GitHub Actions workflow after validated changes are committed and
-  pushed to `main`.
+  `Release` GitHub Actions workflow after a PR is merged to `main` with
+  `scripts/ops/merge.sh`.
 - `scripts/release-runtime-kit.sh --version X.Y.Z --channel stable --publish`
   is the canonical release engine used by Actions and is reserved for
   break-glass maintainer use.
