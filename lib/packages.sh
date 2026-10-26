@@ -63,7 +63,7 @@ mrtk_install_or_update_deno() {
 
   mrtk_log "installing Deno ${version} with official deno.land installer"
   CI=1 DENO_INSTALL="$install_dir" sh -c \
-    "curl -fsSL https://deno.land/install.sh | sh -s -- --no-modify-path v${version}"
+    "curl --proto '=https' --tlsv1.2 -fsSL https://deno.land/install.sh | sh -s -- --no-modify-path v${version}"
 
   ln -sfn "${install_dir}/bin/deno" /usr/local/bin/deno
   ln -sfn "${install_dir}/bin/deno" /usr/bin/deno 2>/dev/null || true
@@ -86,7 +86,7 @@ mrtk_install_nginx_org_repository() {
     mrtk_apt_get update -y
     mrtk_apt_get install -y curl gnupg2 ca-certificates lsb-release debian-archive-keyring
 
-    curl -fsSL https://nginx.org/keys/nginx_signing.key \
+    curl --proto '=https' --tlsv1.2 -fsSL https://nginx.org/keys/nginx_signing.key \
       | gpg --dearmor \
       | tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
 
@@ -172,10 +172,10 @@ mrtk_install_nodesource_repository() {
   if [[ "$MRTK_OS_FAMILY" == "debian" ]]; then
     mrtk_apt_get update -y
     mrtk_apt_get install -y --no-install-recommends ca-certificates curl gnupg
-    curl -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
+    curl --proto '=https' --tlsv1.2 -fsSL "https://deb.nodesource.com/setup_${major}.x" | bash -
   else
     dnf install -y ca-certificates curl
-    curl -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
+    curl --proto '=https' --tlsv1.2 -fsSL "https://rpm.nodesource.com/setup_${major}.x" | bash -
   fi
 }
 
@@ -217,7 +217,7 @@ mrtk_install_docker_repository() {
 
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg
-    curl -fsSL https://download.docker.com/linux/debian/gpg \
+    curl --proto '=https' --tlsv1.2 -fsSL https://download.docker.com/linux/debian/gpg \
       | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
 
@@ -460,9 +460,9 @@ mrtk_configure_rabbitmq_debian_repository() {
 
   install -d -m 0755 /etc/apt/keyrings
   rm -f /etc/apt/keyrings/com.rabbitmq.team.gpg /etc/apt/keyrings/rabbitmq-release-signing-key.gpg
-  curl -1sLf 'https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA' \
+  curl --proto '=https' --tlsv1.2 -sLf 'https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA' \
     | gpg --dearmor > /etc/apt/keyrings/com.rabbitmq.team.gpg
-  curl -1sLf 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc' \
+  curl --proto '=https' --tlsv1.2 -sLf 'https://github.com/rabbitmq/signing-keys/releases/download/3.0/rabbitmq-release-signing-key.asc' \
     | gpg --dearmor > /etc/apt/keyrings/rabbitmq-release-signing-key.gpg
 
   cat > /etc/apt/sources.list.d/rabbitmq.list <<EOF
@@ -598,7 +598,7 @@ mrtk_openbao_installed_version() {
 
 mrtk_openbao_latest_version() {
   local api_url="${MNSCLOUD_OPENBAO_LATEST_URL:-https://api.github.com/repos/openbao/openbao/releases/latest}"
-  curl -fsSL "$api_url" | awk -F'"' '/"tag_name"[[:space:]]*:/ {gsub(/^v/, "", $4); print $4; exit}'
+  curl --proto '=https' --tlsv1.2 -fsSL "$api_url" | awk -F'"' '/"tag_name"[[:space:]]*:/ {gsub(/^v/, "", $4); print $4; exit}'
 }
 
 mrtk_install_or_update_openbao_binary() {
@@ -630,8 +630,8 @@ mrtk_install_or_update_openbao_binary() {
   trap 'rm -rf "${tmp_dir:-}"' RETURN
 
   mrtk_log "downloading OpenBao ${version} (${arch})"
-  curl -fsSL "$asset_url" -o "${tmp_dir}/openbao.tar.gz"
-  curl -fsSL "$checksum_url" -o "${tmp_dir}/checksums.txt"
+  curl --proto '=https' --tlsv1.2 -fsSL "$asset_url" -o "${tmp_dir}/openbao.tar.gz"
+  curl --proto '=https' --tlsv1.2 -fsSL "$checksum_url" -o "${tmp_dir}/checksums.txt"
 
   expected="$(awk -v file="openbao_${version}_linux_${arch}.tar.gz" '$2 == file {print $1; exit}' "${tmp_dir}/checksums.txt")"
   [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] ||
@@ -723,7 +723,7 @@ mrtk_configure_freeswitch_repository() {
   mrtk_log "configuring official FreeSWITCH SignalWire repository"
   mrtk_apt_get update -y
   mrtk_apt_get install -y --no-install-recommends ca-certificates curl gnupg
-  curl -fsSL https://freeswitch.org/fsget | bash -s "$token" release
+  curl --proto '=https' --tlsv1.2 -fsSL https://freeswitch.org/fsget | bash -s "$token" release
 
   if [[ -n "${MNSCLOUD_FREESWITCH_REPO_SUITE:-${FREESWITCH_REPO_SUITE:-}}" ]]; then
     local suite="${MNSCLOUD_FREESWITCH_REPO_SUITE:-${FREESWITCH_REPO_SUITE:-}}"
@@ -826,7 +826,7 @@ mrtk_configure_opensips_repository() {
     DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/opensips.gpg.tmp
-    curl -fsSL https://apt.opensips.org/opensips-org.gpg \
+    curl --proto '=https' --tlsv1.2 -fsSL https://apt.opensips.org/opensips-org.gpg \
       | gpg --dearmor -o /usr/share/keyrings/opensips.gpg.tmp
     mv /usr/share/keyrings/opensips.gpg.tmp /usr/share/keyrings/opensips.gpg
     chmod 0644 /usr/share/keyrings/opensips.gpg
@@ -907,7 +907,7 @@ mrtk_configure_kamailio_repository() {
     DEBIAN_FRONTEND=noninteractive mrtk_apt_get "${apt_options[@]}" install -y --no-install-recommends ca-certificates curl gnupg
     install -m 0755 -d /usr/share/keyrings
     rm -f /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
-    curl -fsSL -o /usr/share/keyrings/kamailio.asc.tmp https://deb.kamailio.org/kamailiodebkey.gpg
+    curl --proto '=https' --tlsv1.2 -fsSL -o /usr/share/keyrings/kamailio.asc.tmp https://deb.kamailio.org/kamailiodebkey.gpg
     gpg --batch --yes --dearmor -o /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.asc.tmp
     rm -f /usr/share/keyrings/kamailio.asc.tmp
     mv /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.gpg
@@ -1023,7 +1023,7 @@ mrtk_install_mariadb_org_repository() {
       [[ -n "$codename" ]] || mrtk_die "cannot determine Debian codename for MariaDB repository"
 
       install -d -m 0755 /etc/apt/keyrings
-      curl -fsSL https://mariadb.org/mariadb_release_signing_key.pgp \
+      curl --proto '=https' --tlsv1.2 -fsSL https://mariadb.org/mariadb_release_signing_key.pgp \
         -o /etc/apt/keyrings/mariadb-keyring.asc
       cat > /etc/apt/sources.list.d/mariadb.sources <<EOF
 # MariaDB 12.3 repository list
@@ -1053,7 +1053,7 @@ EOF
   local repo_setup
   repo_setup="$(mktemp)"
   trap 'rm -f "$repo_setup"' RETURN
-  curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup -o "$repo_setup"
+  curl --proto '=https' --tlsv1.2 -LsS https://r.mariadb.com/downloads/mariadb_repo_setup -o "$repo_setup"
 
   local os_type="$MRTK_OS_FAMILY"
   local os_version="$MRTK_OS_VERSION_ID"
@@ -1234,7 +1234,7 @@ mrtk_install_pinned_apt_repository() {
   mrtk_apt_get update -y
   mrtk_apt_get install -y curl gnupg ca-certificates
   temp="$(mktemp)"
-  curl -fsSL "$key_url" -o "$temp" || { rm -f "$temp"; mrtk_die "${name} signing key download failed"; }
+  curl --proto '=https' --tlsv1.2 -fsSL "$key_url" -o "$temp" || { rm -f "$temp"; mrtk_die "${name} signing key download failed"; }
   actual="$(gpg --show-keys --with-colons "$temp" 2>/dev/null | awk -F: '$1 == "fpr" {print $10; exit}')"
   if [[ "$actual" != "$fingerprint" ]]; then
     rm -f "$temp"
