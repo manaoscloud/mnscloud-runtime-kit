@@ -52,7 +52,7 @@ jobs:
 
       - name: Resolve packages
         if: steps.token.outputs.present == 'true'
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: SonarCloud scan
         if: steps.token.outputs.present == 'true'
