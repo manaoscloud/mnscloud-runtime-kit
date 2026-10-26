@@ -75,8 +75,9 @@ class LintTests(unittest.TestCase):
             f"violations = {json.dumps(violations)!r}\n"
             "violations = json.loads(violations)\n"
             "target = sys.argv[-1]\n"
-            "out = [{'filepath': os.path.join(target, name), 'violations': violations.get(name, [])}\n"
-            "       for name in sorted(os.listdir(target))]\n"
+            "assert target == '.' and os.path.isfile('.sqlfluff')\n"
+            "out = [{'filepath': name, 'violations': violations.get(name, [])}\n"
+            "       for name in sorted(os.listdir(target)) if name.endswith('.sql')]\n"
             "print(json.dumps(out))\n"
             "sys.exit(1 if any(o['violations'] for o in out) else 0)\n",
             encoding="utf-8",

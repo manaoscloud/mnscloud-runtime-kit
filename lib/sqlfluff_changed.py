@@ -124,22 +124,24 @@ def lint_units(sqlfluff: str, dialect: str, config: str | None, path: str, units
                 print(f"::warning file={path},line={unit.start}::SQLFluff skipped a statement over "
                       f"{MAX_UNIT_BYTES} bytes")
                 continue
-            name = os.path.join(tmp, f"unit_{number:05d}.sql")
-            Path(name).write_text(body, encoding="utf-8")
+            name = f"unit_{number:05d}.sql"
+            Path(tmp, name).write_text(body, encoding="utf-8")
             index[name] = unit
         if not index:
             return findings, skipped
+        # SQLFluff reads the .sqlfluff of the directory it runs in; the caller's config is layered on top.
+        Path(tmp, ".sqlfluff").write_text(
+            f"[sqlfluff]\nlarge_file_skip_byte_limit = {MAX_UNIT_BYTES}\n", encoding="utf-8")
         command = [sqlfluff, "lint", "--dialect", dialect, "--format", "json", "--nofail",
-                   "--disable-progress-bar", "--processes", "-1",
-                   "--large-file-skip-byte-limit", str(MAX_UNIT_BYTES)]
+                   "--disable-progress-bar", "--processes", "-1"]
         if config:
-            command += ["--config", config]
-        result = subprocess.run([*command, tmp], capture_output=True, text=True)
+            command += ["--config", os.path.abspath(config)]
+        result = subprocess.run([*command, "."], capture_output=True, text=True, cwd=tmp)
         if result.returncode not in (0, 1):
             sys.stderr.write(result.stderr)
             raise RuntimeError(f"sqlfluff exited with {result.returncode}")
         for report in json.loads(result.stdout or "[]"):
-            unit = index.get(os.path.join(tmp, os.path.basename(report["filepath"])))
+            unit = index.get(os.path.basename(report["filepath"]))
             if unit is None:
                 continue
             for violation in report.get("violations", []):
