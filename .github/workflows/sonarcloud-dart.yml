@@ -1,0 +1,70 @@
+name: SonarCloud Dart analysis
+
+# Reusable CI-based SonarQube Cloud analysis for the Flutter repositories: automatic analysis does
+# not analyse Dart, so these projects run the scanner from CI (their automatic analysis must be
+# switched off in SonarQube Cloud, or the analysis is refused). No coverage report is sent (user
+# decision 2026-10-26), so the Sonar way coverage condition stays inactive.
+# Without the SONAR_TOKEN secret (fork pull requests, or before the token is provisioned) the job
+# passes with a notice instead of failing.
+on:
+  workflow_call:
+    inputs:
+      exclusions:
+        description: "Extra comma-separated sonar.exclusions patterns (vendored or generated code)."
+        type: string
+        default: ""
+    secrets:
+      SONAR_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  analyze:
+    name: SonarCloud CI analysis
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Token availability
+        id: token
+        run: |
+          if [[ -z "$SONAR_TOKEN" ]]; then
+            echo "::notice::SONAR_TOKEN is not available to this run; SonarCloud CI analysis skipped."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Flutter
+        if: steps.token.outputs.present == 'true'
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+
+      - name: Resolve packages
+        if: steps.token.outputs.present == 'true'
+        run: flutter pub get
+
+      - name: SonarCloud scan
+        if: steps.token.outputs.present == 'true'
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.organization=manaoscloud
+            -Dsonar.projectKey=manaoscloud_${{ github.event.repository.name }}
+            -Dsonar.sources=.
+            -Dsonar.tests=test
+            -Dsonar.test.inclusions=test/**
+            -Dsonar.exclusions=test/**,build/**,.dart_tool/**,**/*.g.dart,**/*.freezed.dart,**/generated_plugin_registrant.*${{ inputs.exclusions != '' && format(',{0}', inputs.exclusions) || '' }}
