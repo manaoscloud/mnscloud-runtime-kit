@@ -913,7 +913,7 @@ mrtk_configure_kamailio_repository() {
     mv /usr/share/keyrings/kamailio.gpg.tmp /usr/share/keyrings/kamailio.gpg
     chmod 0644 /usr/share/keyrings/kamailio.gpg
     cat > /etc/apt/sources.list.d/kamailio.list <<EOF
-deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio${repo_suffix} ${codename} main
+deb [signed-by=/usr/share/keyrings/kamailio.gpg] https://deb.kamailio.org/kamailio${repo_suffix} ${codename} main
 EOF
     cat > /etc/apt/preferences.d/kamailio <<'EOF'
 Package: kamailio*
