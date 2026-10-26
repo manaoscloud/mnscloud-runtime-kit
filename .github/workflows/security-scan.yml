@@ -1,0 +1,136 @@
+name: Security scan
+
+# Reusable security gate for MNSCloud repositories (private repositories in particular, which have
+# no SonarQube Cloud analysis when they exceed the free plan). One place pins every scanner:
+#   - Gitleaks: committed secrets in the working tree.
+#   - Trivy: HIGH/CRITICAL vulnerabilities and misconfigurations with a fix available.
+#   - Opengrep: SAST with data-flow (taint) rules. On a pull request only findings that are new
+#     against the base commit fail; on a push it reports without failing, so a pre-existing finding
+#     never blocks a release.
+#   - SQLFluff (optional): lints the SQL files changed by a pull request in the given dialect.
+# Bump a scanner by changing its version and checksum here, never in the callers.
+on:
+  workflow_call:
+    inputs:
+      gitleaks:
+        description: "Run the Gitleaks secret scan (uses .gitleaks.toml when present)."
+        type: boolean
+        default: true
+      trivy:
+        description: "Run the Trivy filesystem scan (uses .trivyignore when present)."
+        type: boolean
+        default: true
+      opengrep:
+        description: "Run the Opengrep SAST scan."
+        type: boolean
+        default: true
+      opengrep_rules:
+        description: "Space-separated rule directories of opengrep-rules to apply."
+        type: string
+        default: "typescript javascript python bash dockerfile"
+      opengrep_exclude:
+        description: "Space-separated paths excluded from Opengrep (tests and fixtures)."
+        type: string
+        default: ""
+      sqlfluff_dialect:
+        description: "SQLFluff dialect; empty disables SQL linting."
+        type: string
+        default: ""
+      sqlfluff_blocking:
+        description: "Fail the job on SQLFluff findings (false while a repository is in its pilot)."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  OPENGREP_VERSION: v1.30.2
+  OPENGREP_SHA256: a66aa3278457f02b287b985a45b6762aebcaba5000f2689245fd1ed86d1456c7
+  OPENGREP_RULES_SHA: f1d2b562b414783763fd02a6ed2736eaed622efa
+  SQLFLUFF_VERSION: 4.4.0
+
+jobs:
+  scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gitleaks secret scan
+        if: ${{ inputs.gitleaks }}
+        run: |
+          set -euo pipefail
+          config=()
+          [[ -f .gitleaks.toml ]] && config=(--config=/repo/.gitleaks.toml)
+          docker run --rm -v "$PWD:/repo:ro" "$GITLEAKS_IMAGE" dir /repo "${config[@]}" --redact --verbose --exit-code=1
+
+      - name: Trivy security scan
+        if: ${{ inputs.trivy }}
+        run: |
+          set -euo pipefail
+          ignore=()
+          [[ -f .trivyignore ]] && ignore=(--ignorefile /repo/.trivyignore)
+          docker run --rm -v "$PWD:/repo:ro" "$TRIVY_IMAGE" fs --scanners vuln,misconfig \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code=1 "${ignore[@]}" /repo
+
+      - name: Opengrep SAST scan
+        if: ${{ inputs.opengrep }}
+        env:
+          RULE_DIRS: ${{ inputs.opengrep_rules }}
+          EXCLUDES: ${{ inputs.opengrep_exclude }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bin="${RUNNER_TEMP}/opengrep"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$bin" \
+            "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86"
+          echo "${OPENGREP_SHA256}  ${bin}" | sha256sum -c -
+          chmod +x "$bin"
+          rules="${RUNNER_TEMP}/opengrep-rules"
+          git init -q "$rules"
+          git -C "$rules" fetch -q --depth 1 https://github.com/opengrep/opengrep-rules "$OPENGREP_RULES_SHA"
+          git -C "$rules" checkout -q FETCH_HEAD
+          args=(scan)
+          for dir in $RULE_DIRS; do
+            [[ "$dir" =~ ^[a-z_]+$ && -d "${rules}/${dir}" ]] || { echo "unknown rule directory: $dir" >&2; exit 1; }
+            args+=(--config "${rules}/${dir}")
+          done
+          for path in $EXCLUDES; do args+=(--exclude "$path"); done
+          if [[ "$EVENT_NAME" == "pull_request" && -n "$BASE_SHA" ]]; then
+            # Only findings introduced by this pull request fail the gate.
+            "$bin" "${args[@]}" --error --baseline-commit "$BASE_SHA" .
+          else
+            # Report the full picture on main without blocking the release of an unrelated change.
+            "$bin" "${args[@]}" . || echo "::warning::Opengrep reported findings on ${GITHUB_REF_NAME}"
+          fi
+
+      - name: SQLFluff lint of changed SQL
+        if: ${{ inputs.sqlfluff_dialect != '' && github.event_name == 'pull_request' }}
+        env:
+          DIALECT: ${{ inputs.sqlfluff_dialect }}
+          BLOCKING: ${{ inputs.sqlfluff_blocking }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.sql')
+          if [[ "${#files[@]}" -eq 0 ]]; then
+            echo "No SQL file changed."
+            exit 0
+          fi
+          python3 -m venv "${RUNNER_TEMP}/sqlfluff"
+          "${RUNNER_TEMP}/sqlfluff/bin/pip" install --quiet "sqlfluff==${SQLFLUFF_VERSION}"
+          if "${RUNNER_TEMP}/sqlfluff/bin/sqlfluff" lint --dialect "$DIALECT" --processes 2 "${files[@]}"; then
+            exit 0
+          fi
+          if [[ "$BLOCKING" == "true" ]]; then
+            exit 1
+          fi
+          echo "::warning::SQLFluff reported findings (pilot: not blocking)"
