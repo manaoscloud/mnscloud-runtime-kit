@@ -158,7 +158,7 @@ jobs:
 
       - name: Install Node.js dependencies
         if: ${{ inputs.setup_node }}
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Setup Flutter
         if: ${{ inputs.setup_flutter }}
