@@ -2,8 +2,10 @@ name: SonarCloud Dart analysis
 
 # Reusable CI-based SonarQube Cloud analysis for the Flutter repositories: automatic analysis does
 # not analyse Dart, so these projects run the scanner from CI (their automatic analysis must be
-# switched off in SonarQube Cloud, or the analysis is refused). No coverage report is sent (user
-# decision 2026-10-26), so the Sonar way coverage condition stays inactive.
+# switched off in SonarQube Cloud, or the analysis is refused). Coverage is out of scope (user
+# decision 2026-10-26): CI analysis would otherwise report 0% for every Dart line and turn the Sonar
+# way coverage condition on, so coverage is excluded for all files; bugs, vulnerabilities, smells
+# and duplication are still analysed.
 # Without the SONAR_TOKEN secret (fork pull requests, or before the token is provisioned) the job
 # passes with a notice instead of failing.
 on:
@@ -66,4 +68,5 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.tests=test
             -Dsonar.test.inclusions=test/**
+            -Dsonar.coverage.exclusions=**/*
             -Dsonar.exclusions=test/**,build/**,.dart_tool/**,**/*.g.dart,**/*.freezed.dart,**/generated_plugin_registrant.*${{ inputs.exclusions != '' && format(',{0}', inputs.exclusions) || '' }}
