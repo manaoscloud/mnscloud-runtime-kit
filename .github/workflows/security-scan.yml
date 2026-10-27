@@ -130,7 +130,7 @@ jobs:
           fi
           [[ "$KIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "unknown runtime-kit commit: '$KIT_SHA'" >&2; exit 1; }
           helper="${RUNNER_TEMP}/sqlfluff_changed.py"
-          curl -fsSL --retry 3 -o "$helper" \
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$helper" \
             "https://raw.githubusercontent.com/manaoscloud/mnscloud-runtime-kit/${KIT_SHA}/lib/sqlfluff_changed.py"
           python3 -m venv "${RUNNER_TEMP}/sqlfluff"
           "${RUNNER_TEMP}/sqlfluff/bin/pip" install --quiet "sqlfluff==${SQLFLUFF_VERSION}"

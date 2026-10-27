@@ -29,6 +29,8 @@ from dataclasses import dataclass
 DELIMITER_RE = re.compile(r"^\s*DELIMITER\s+(\S+)\s*$", re.IGNORECASE)
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 PARSE_CODES = {"PRS", "TMP"}
+COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
+CONFIG_NAME = ".sqlfluff"
 # A single statement larger than this is reported as skipped instead of risking a parser lock.
 MAX_UNIT_BYTES = 200_000
 
@@ -55,12 +57,19 @@ class Finding:
         return self.code not in PARSE_CODES
 
 
+def commit(value: str) -> str:
+    """The base commit as a full or abbreviated SHA, so it can never be read as a git option."""
+    if not COMMIT_RE.match(value):
+        raise argparse.ArgumentTypeError(f"not a commit SHA: {value!r}")
+    return value
+
+
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
 def changed_files(base: str) -> list[str]:
-    out = git("diff", "--name-only", "--diff-filter=ACMR", base, "HEAD", "--", "*.sql")
+    out = git("diff", "--name-only", "--diff-filter=ACMR", commit(base), "HEAD", "--", "*.sql")
     return [line for line in out.splitlines() if line]
 
 
@@ -76,6 +85,22 @@ def added_lines(diff: str) -> set[int]:
     return lines
 
 
+def is_comment(line: str) -> bool:
+    return line.lstrip().startswith("--")
+
+
+def closes(line: str, delimiter: str) -> bool:
+    stripped = line.rstrip()
+    return stripped.endswith(delimiter) and not is_comment(stripped)
+
+
+def statement(start: int, lines: list[str], delimiter: str) -> Unit:
+    """A finished statement whose closing delimiter is rewritten to `;`."""
+    if delimiter != ";":
+        lines[-1] = lines[-1].rstrip()[: -len(delimiter)] + ";"
+    return Unit(start, lines)
+
+
 def split_units(text: str) -> list[Unit]:
     """Statements of a SQL script, each ending with its delimiter, rewritten to end with `;`."""
     units: list[Unit] = []
@@ -86,22 +111,16 @@ def split_units(text: str) -> list[Unit]:
         match = DELIMITER_RE.match(line)
         if match:
             # Only comments can precede a DELIMITER line; they belong to no statement.
-            if any(not row.lstrip().startswith("--") for row in current if row.strip()):
+            if any(row.strip() and not is_comment(row) for row in current):
                 units.append(Unit(start, current))
-            current = []
-            delimiter = match.group(1)
-            continue
-        if not current:
-            if not line.strip():
-                continue
-            start = number
-        current.append(line)
-        stripped = line.rstrip()
-        if stripped.endswith(delimiter) and not stripped.lstrip().startswith("--"):
-            if delimiter != ";":
-                current[-1] = stripped[: -len(delimiter)] + ";"
-            units.append(Unit(start, current))
-            current = []
+            current, delimiter = [], match.group(1)
+        elif current or line.strip():
+            if not current:
+                start = number
+            current.append(line)
+            if closes(line, delimiter):
+                units.append(statement(start, current, delimiter))
+                current = []
     if current:
         units.append(Unit(start, current))
     return units
@@ -111,45 +130,52 @@ def touched_units(units: list[Unit], added: set[int]) -> list[Unit]:
     return [unit for unit in units if any(unit.start <= line <= unit.end for line in added)]
 
 
+def write_units(directory: str, path: str, units: list[Unit]) -> tuple[dict[str, Unit], int]:
+    """Write each statement to its own file; statements over the size cap are skipped."""
+    index: dict[str, Unit] = {}
+    skipped = 0
+    for number, unit in enumerate(units):
+        body = "\n".join(unit.lines) + "\n"
+        if len(body.encode()) > MAX_UNIT_BYTES:
+            skipped += 1
+            print(f"::warning file={path},line={unit.start}::SQLFluff skipped a statement over "
+                  f"{MAX_UNIT_BYTES} bytes")
+            continue
+        name = f"unit_{number:05d}.sql"
+        Path(directory, name).write_text(body, encoding="utf-8")
+        index[name] = unit
+    # SQLFluff reads the config of the directory it runs in; the caller's config is layered on top.
+    Path(directory, CONFIG_NAME).write_text(
+        f"[sqlfluff]\nlarge_file_skip_byte_limit = {MAX_UNIT_BYTES}\n", encoding="utf-8")
+    return index, skipped
+
+
+def run_sqlfluff(sqlfluff: str, dialect: str, config: str | None, directory: str) -> list[dict]:
+    command = [sqlfluff, "lint", "--dialect", dialect, "--format", "json", "--nofail",
+               "--disable-progress-bar", "--processes", "-1"]
+    if config:
+        command += ["--config", os.path.abspath(config)]
+    result = subprocess.run([*command, "."], capture_output=True, text=True, cwd=directory)
+    if result.returncode not in (0, 1):
+        sys.stderr.write(result.stderr)
+        raise RuntimeError(f"sqlfluff exited with {result.returncode}")
+    return json.loads(result.stdout or "[]")
+
+
 def lint_units(sqlfluff: str, dialect: str, config: str | None, path: str, units: list[Unit],
                added: set[int]) -> tuple[list[Finding], int]:
     findings: list[Finding] = []
-    skipped = 0
     with tempfile.TemporaryDirectory(prefix="sqlfluff-units-") as tmp:
-        index: dict[str, Unit] = {}
-        for number, unit in enumerate(units):
-            body = "\n".join(unit.lines) + "\n"
-            if len(body.encode()) > MAX_UNIT_BYTES:
-                skipped += 1
-                print(f"::warning file={path},line={unit.start}::SQLFluff skipped a statement over "
-                      f"{MAX_UNIT_BYTES} bytes")
-                continue
-            name = f"unit_{number:05d}.sql"
-            Path(tmp, name).write_text(body, encoding="utf-8")
-            index[name] = unit
-        if not index:
-            return findings, skipped
-        # SQLFluff reads the .sqlfluff of the directory it runs in; the caller's config is layered on top.
-        Path(tmp, ".sqlfluff").write_text(
-            f"[sqlfluff]\nlarge_file_skip_byte_limit = {MAX_UNIT_BYTES}\n", encoding="utf-8")
-        command = [sqlfluff, "lint", "--dialect", dialect, "--format", "json", "--nofail",
-                   "--disable-progress-bar", "--processes", "-1"]
-        if config:
-            command += ["--config", os.path.abspath(config)]
-        result = subprocess.run([*command, "."], capture_output=True, text=True, cwd=tmp)
-        if result.returncode not in (0, 1):
-            sys.stderr.write(result.stderr)
-            raise RuntimeError(f"sqlfluff exited with {result.returncode}")
-        for report in json.loads(result.stdout or "[]"):
-            unit = index.get(os.path.basename(report["filepath"]))
-            if unit is None:
-                continue
-            for violation in report.get("violations", []):
-                line = unit.start + int(violation.get("start_line_no", 1)) - 1
-                code = violation.get("code", "")
-                # A parse error belongs to the whole statement; a lint rule only to its own line.
-                if code in PARSE_CODES or line in added:
-                    findings.append(Finding(path, line, code, violation.get("description", "")))
+        index, skipped = write_units(tmp, path, units)
+        reports = run_sqlfluff(sqlfluff, dialect, config, tmp) if index else []
+    for report in reports:
+        unit = index.get(os.path.basename(report["filepath"]))
+        for violation in report.get("violations", []) if unit else []:
+            line = unit.start + int(violation.get("start_line_no", 1)) - 1
+            code = violation.get("code", "")
+            # A parse error belongs to the whole statement; a lint rule only to its own line.
+            if code in PARSE_CODES or line in added:
+                findings.append(Finding(path, line, code, violation.get("description", "")))
     return findings, skipped
 
 
@@ -161,14 +187,14 @@ def annotate(finding: Finding, blocking: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--base", required=True, help="base commit of the pull request")
+    parser.add_argument("--base", required=True, type=commit, help="base commit SHA of the pull request")
     parser.add_argument("--dialect", required=True)
     parser.add_argument("--sqlfluff", default="sqlfluff", help="sqlfluff executable")
-    parser.add_argument("--config", help="SQLFluff config file (default: .sqlfluff when present)")
+    parser.add_argument("--config", help=f"SQLFluff config file (default: {CONFIG_NAME} when present)")
     parser.add_argument("--blocking", action="store_true", help="exit 1 on lint violations")
     args = parser.parse_args(argv)
 
-    config = args.config or (".sqlfluff" if Path(".sqlfluff").is_file() else None)
+    config = args.config or (CONFIG_NAME if Path(CONFIG_NAME).is_file() else None)
     files = changed_files(args.base)
     if not files:
         print("No SQL file changed.")
@@ -176,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     findings: list[Finding] = []
     statements = 0
     for path in files:
-        added = added_lines(git("diff", "-U0", args.base, "HEAD", "--", path))
+        added = added_lines(git("diff", "-U0", commit(args.base), "HEAD", "--", path))
         if not added:
             continue
         units = touched_units(split_units(Path(path).read_text(encoding="utf-8")), added)

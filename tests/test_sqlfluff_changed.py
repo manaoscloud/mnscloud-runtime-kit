@@ -65,6 +65,14 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(m.added_lines(diff), {3, 11, 12, 30, 31, 32})
 
 
+class CommitTests(unittest.TestCase):
+    def test_base_must_be_a_commit_sha(self):
+        self.assertEqual(m.commit("75ac416dace3d939e862520a1e66df82691846c2"), "75ac416dace3d939e862520a1e66df82691846c2")
+        for value in ("--output=/tmp/x", "HEAD", "main", "", "75AC416"):
+            with self.assertRaises(m.argparse.ArgumentTypeError):
+                m.commit(value)
+
+
 class LintTests(unittest.TestCase):
     def fake_sqlfluff(self, directory: str, violations: dict) -> str:
         """An executable that prints a SQLFluff JSON report for each unit file it is given."""
