@@ -7,7 +7,9 @@ name: Security scan
 #   - Opengrep: SAST with data-flow (taint) rules. On a pull request only findings that are new
 #     against the base commit fail; on a push it reports without failing, so a pre-existing finding
 #     never blocks a release.
-#   - SQLFluff (optional): lints the SQL files changed by a pull request in the given dialect.
+#   - SQLFluff (optional): lints the statements a pull request changes, in the given dialect, and
+#     reports only violations on its added lines (lib/sqlfluff_changed.py; the caller's .sqlfluff
+#     selects the rules).
 # Bump a scanner by changing its version and checksum here, never in the callers.
 on:
   workflow_call:
@@ -37,7 +39,7 @@ on:
         type: string
         default: ""
       sqlfluff_blocking:
-        description: "Fail the job on SQLFluff findings (false while a repository is in its pilot)."
+        description: "Fail the job on SQLFluff violations on added lines (parse errors only warn)."
         type: boolean
         default: false
 
@@ -118,19 +120,22 @@ jobs:
           DIALECT: ${{ inputs.sqlfluff_dialect }}
           BLOCKING: ${{ inputs.sqlfluff_blocking }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # The helper comes from this same runtime-kit commit, never from a moving branch.
+          KIT_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
-          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.sql')
-          if [[ "${#files[@]}" -eq 0 ]]; then
+          if git diff --quiet "$BASE_SHA" HEAD -- '*.sql'; then
             echo "No SQL file changed."
             exit 0
           fi
+          [[ "$KIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "unknown runtime-kit commit: '$KIT_SHA'" >&2; exit 1; }
+          helper="${RUNNER_TEMP}/sqlfluff_changed.py"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$helper" \
+            "https://raw.githubusercontent.com/manaoscloud/mnscloud-runtime-kit/${KIT_SHA}/lib/sqlfluff_changed.py"
           python3 -m venv "${RUNNER_TEMP}/sqlfluff"
           "${RUNNER_TEMP}/sqlfluff/bin/pip" install --quiet "sqlfluff==${SQLFLUFF_VERSION}"
-          if "${RUNNER_TEMP}/sqlfluff/bin/sqlfluff" lint --dialect "$DIALECT" --processes 2 "${files[@]}"; then
-            exit 0
-          fi
-          if [[ "$BLOCKING" == "true" ]]; then
-            exit 1
-          fi
-          echo "::warning::SQLFluff reported findings (pilot: not blocking)"
+          # Only the statements a pull request touches are linted, and only its added lines count;
+          # a statement SQLFluff cannot parse is a warning (the repository tests are the syntax authority).
+          args=(--base "$BASE_SHA" --dialect "$DIALECT" --sqlfluff "${RUNNER_TEMP}/sqlfluff/bin/sqlfluff")
+          [[ "$BLOCKING" == "true" ]] && args+=(--blocking)
+          python3 "$helper" "${args[@]}"
