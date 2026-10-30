@@ -219,8 +219,9 @@ mrtk_release_prepare ... \
   --asset-glob 'releases/mnscloud-demo-web-v*.tar.gz*'
 ```
 
-Repositories that build with Flutter in the release job set `setup_flutter: true` (optionally
-`flutter_channel` / `flutter_version`) on the shared `auto-release.yml` workflow.
+Repositories that build with Flutter in the release job set `setup_flutter: true` on the shared
+`auto-release.yml` workflow; the Flutter version comes from `toolchains/flutter.json` (section
+Flutter clients). `flutter_version` overrides it only for a break-glass rebuild.
 
 Repositories whose `main` is protected (pull request and status checks required) set
 `tag_only: true`: the release commit (VERSION, manifest) is pushed only as the annotated tag, never to
@@ -230,6 +231,54 @@ Use `--asset-glob` in the repository release script to upload those files to the
 The shared workflow derives the final HTTPS asset URL from the release tag and sends URL, SHA-256,
 size, and content type to the MNSCloud runtime release cache. Runtime hosts must download and verify
 that artifact instead of rebuilding source code locally.
+
+## Flutter clients
+
+Shared toolchain, CI and PWA contract of every MNSCloud Flutter client (PhoneWeb, Pulse, POS,
+InfraGIS Mobile and new ones). The workspace contract that tells when to use each piece is
+`docs/flutter-client-standard.md` in `manaoscloud/mnscloud`.
+
+- **Toolchain.** `toolchains/flutter.json` pins the latest Flutter stable. `auto-release.yml`,
+  `sonarcloud-dart.yml` and `flutter-client-ci.yml` install exactly that version
+  (`scripts/flutter-toolchain.py get flutter`), so a rebuild of a tag is reproducible. The weekly
+  `flutter-toolchain-bump.yml` workflow compares it with the newest stable, validates the four
+  clients against it (pub get, analyze, test, web build) and proposes the bump on the branch
+  `chore/flutter-toolchain-<x-y-z>` (pull request, or an issue where Actions may not open pull
+  requests). Merge it with `scripts/ops/merge.sh`; clients pick it up on their next run.
+- **CI.** `.github/workflows/flutter-client-ci.yml` (inputs `targets`, `web_mode`, `web_check`,
+  `native_check_args`, `linux_packages`, `apple`) runs analyze, test, the native configuration
+  check and one build per declared target. Apple builds need `apple: true` (macOS runners).
+- **Native configuration.** `scripts/check-flutter-native.py` fails when a release build could
+  not reach the network or a declared device: `INTERNET` in the main Android manifest,
+  `network.client` in both macOS entitlements, extra permissions, entitlements and Info.plist
+  keys, and iOS 15 / macOS 12 minimum deployment targets.
+- **PWA.** Flutter no longer ships a caching service worker (3.47 writes a self-unregistering
+  stub). After `flutter build web --release --base-href / --no-web-resources-cdn`, run:
+
+  ```bash
+  python3 "$MNSCLOUD_RUNTIME_KIT_DIR/scripts/flutter-pwa.py" generate --build-dir build/web --app <app>
+  python3 "$MNSCLOUD_RUNTIME_KIT_DIR/scripts/flutter-pwa.py" validate --build-dir build/web --base-href /
+  ```
+
+  `generate` writes `sw.js` from `templates/pwa/sw.js`:
+  - It precaches the app shell of the build plus the CanvasKit variant the browser loads, and
+    serves one revision atomically (cache first). The old revision stays until the app applies the
+    update.
+  - It never caches `/api/`, `build.json`, `update-policy.json` or `version.json`, and it ignores
+    anything outside its scope.
+  - It caches `https://fonts.gstatic.com` on first use. Pass `--runtime-origin` for other https
+    origins.
+
+  `generate` also removes the deprecated Flutter worker registration from `flutter_bootstrap.js`
+  and appends `templates/pwa/register.js`, which exposes:
+  - `window.mnscloudPwa.applyUpdate()`: the "Update now" action of the new-version notice
+    (activates the waiting revision, then reloads);
+  - `window.mnscloudPwa.persistStorage()`.
+
+  `validate` checks the manifest (relative `id`/`scope`/`start_url`, display, 192/512 and maskable
+  icons), `index.html` (base href, manifest link, viewport, theme-color), the worker and the local
+  CanvasKit. The web build stays portable: `mnscloud-webapps` rewrites only `<base href>`, and the
+  worker scope follows it.
 
 ## Local configuration reconciliation primitives
 
