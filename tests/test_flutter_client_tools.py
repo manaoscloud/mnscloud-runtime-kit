@@ -110,6 +110,9 @@ class FlutterPwaTest(unittest.TestCase):
             self.assertTrue(boot.rstrip().endswith('})();'))
             self.assertIn('_flutter.loader.load()', boot)
             self.assertEqual(boot.count('mnscloud-pwa-register v1'), 1)
+            for api in ('applyUpdate', 'persistStorage', 'installState', 'promptInstall',
+                        'onInstallChange', 'beforeinstallprompt'):
+                self.assertIn(api, boot)
             self.assertTrue((build / 'flutter_service_worker.js').exists(), 'stub kept for cleanup')
 
             sw = (build / 'sw.js').read_text()

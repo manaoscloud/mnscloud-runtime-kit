@@ -55,5 +55,69 @@
     return navigator.storage.persist().catch(function () { return false; });
   }
 
-  window.mnscloudPwa = { version: 1, ready: ready, applyUpdate: applyUpdate, persistStorage: persistStorage };
+  // Install ("Install app" button of the client). Chromium browsers offer a prompt the app can
+  // open itself; iOS/iPadOS Safari only installs from Share > Add to Home Screen, so the app shows
+  // those steps instead.
+  var installPrompt = null;
+  var installListeners = [];
+  function notifyInstall() {
+    var state = installState();
+    installListeners.forEach(function (listener) {
+      try { listener(state); } catch (error) { console.warn('[mnscloud-pwa] install listener', error); }
+    });
+  }
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    installPrompt = event;
+    notifyInstall();
+  });
+  window.addEventListener('appinstalled', function () {
+    installPrompt = null;
+    notifyInstall();
+  });
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      window.navigator.standalone === true;
+  }
+
+  function isAppleMobile() {
+    var ua = window.navigator.userAgent;
+    return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && window.navigator.maxTouchPoints > 1);
+  }
+
+  // installed | available (prompt ready) | ios (manual steps) | unavailable
+  function installState() {
+    if (isStandalone()) return 'installed';
+    if (installPrompt) return 'available';
+    if (isAppleMobile()) return 'ios';
+    return 'unavailable';
+  }
+
+  // Opens the browser install prompt; resolves accepted | dismissed | unavailable.
+  function promptInstall() {
+    if (!installPrompt) return Promise.resolve('unavailable');
+    var pending = installPrompt;
+    installPrompt = null;
+    pending.prompt();
+    return pending.userChoice
+      .then(function (choice) { return choice.outcome; })
+      .catch(function () { return 'dismissed'; })
+      .then(function (outcome) { notifyInstall(); return outcome; });
+  }
+
+  function onInstallChange(listener) {
+    if (typeof listener === 'function') installListeners.push(listener);
+  }
+
+  window.mnscloudPwa = {
+    version: 1,
+    ready: ready,
+    applyUpdate: applyUpdate,
+    persistStorage: persistStorage,
+    installState: installState,
+    promptInstall: promptInstall,
+    onInstallChange: onInstallChange
+  };
 })();
