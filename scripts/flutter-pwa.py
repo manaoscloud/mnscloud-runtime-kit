@@ -15,23 +15,31 @@ generate:
   - writes sw.js with the app shell of this build and a revision derived from its content.
 
 validate fails when the manifest, index.html, service worker or bootstrap break the contract
-(see the runtime-kit README, section Flutter clients).
+(see the runtime-kit README, section Flutter clients). The build directory must be under the
+current directory.
 """
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / 'templates' / 'pwa'
+SW_FILE = 'sw.js'
+INDEX_FILE = 'index.html'
+MANIFEST_FILE = 'manifest.json'
+BOOTSTRAP_FILE = 'flutter_bootstrap.js'
 SW_MARKER = 'mnscloud-pwa-sw v1'
 REGISTER_MARKER = 'mnscloud-pwa-register v1'
+LOCAL_CANVASKIT = '"useLocalCanvasKit":true'
+CDN_CANVASKIT_ERROR = 'CanvasKit comes from the Google CDN: build with --no-web-resources-cdn'
 # Files the service worker never serves from cache: the new-version notice reads them, or they are
 # the workers themselves.
 NEVER_CACHE = [
-    'sw.js', 'flutter_service_worker.js', 'build.json', 'update-policy.json', 'version.json',
+    SW_FILE, 'flutter_service_worker.js', 'build.json', 'update-policy.json', 'version.json',
     '.last_build_id',
 ]
 # Loaded on demand: only the CanvasKit variant the browser uses is precached (see sw.js).
@@ -43,10 +51,11 @@ CANVASKIT = {
     'chromium': ['canvaskit/chromium/canvaskit.js', 'canvaskit/chromium/canvaskit.wasm'],
 }
 DEFAULT_RUNTIME_ORIGINS = ['https://fonts.gstatic.com']
-LOADER_SW_RE = re.compile(
-    r'_flutter\.loader\.load\(\s*\{\s*serviceWorkerSettings\s*:\s*\{[^{}]*\}\s*,?\s*\}\s*\)')
 LOADER_CALL = '_flutter.loader.load('
 DISPLAY_MODES = {'standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'}
+REQUIRED_FIELDS = ('name', 'short_name', 'id', 'start_url', 'scope', 'theme_color',
+                   'background_color')
+RELATIVE_FIELDS = ('id', 'start_url', 'scope')
 
 
 def log(message):
@@ -59,21 +68,49 @@ def fail(errors):
     sys.exit(1)
 
 
-def registers_flutter_worker(bootstrap_text):
+def trusted_dir(path):
+    """The build directory is accepted only under the current directory (no traversal)."""
+    base = os.path.realpath(os.getcwd())
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(base + os.sep) or not os.path.isdir(resolved):
+        fail([f'{path}: not a directory under the current directory'])
+    return Path(resolved)
+
+
+def inside(build, rel):
+    """A path named by a build file (manifest icon, precache entry) must stay in the build."""
+    resolved = os.path.realpath(os.path.join(build, rel))
+    return Path(resolved) if resolved.startswith(str(build) + os.sep) else None
+
+
+def loader_tail(text):
+    index = text.rfind(LOADER_CALL)
+    return index, (text[index:] if index >= 0 else '')
+
+
+def registers_flutter_worker(text):
     # The inlined loader code mentions serviceWorkerSettings itself: only the final call matters.
-    index = bootstrap_text.rfind(LOADER_CALL)
-    return index >= 0 and 'serviceWorkerSettings' in bootstrap_text[index:]
+    return 'serviceWorkerSettings' in loader_tail(text)[1]
+
+
+def drop_flutter_worker(text):
+    index, tail = loader_tail(text)
+    if 'serviceWorkerSettings' not in tail:
+        return text
+    end = tail.find('});')
+    if end < 0:
+        return text
+    return text[:index] + '_flutter.loader.load();' + tail[end + 3:]
 
 
 def shell_files(build):
     files = []
     for path in sorted(p for p in build.rglob('*') if p.is_file()):
         rel = path.relative_to(build).as_posix()
-        if rel in NEVER_CACHE or rel in SKIP_FILES:
-            continue
-        if rel.startswith(SKIP_PREFIXES) or rel.endswith(SKIP_SUFFIXES):
-            continue
-        files.append(rel)
+        skipped = (rel in NEVER_CACHE or rel in SKIP_FILES or rel.startswith(SKIP_PREFIXES)
+                   or rel.endswith(SKIP_SUFFIXES))
+        if not skipped:
+            files.append(rel)
     return files
 
 
@@ -85,144 +122,154 @@ def revision(build, paths, template):
     return digest.hexdigest()[:16]
 
 
-def generate(args):
-    build = Path(args.build_dir)
-    bootstrap = build / 'flutter_bootstrap.js'
-    errors = []
-    if not (build / 'index.html').is_file():
-        errors.append(f'{build}/index.html not found: run flutter build web first')
-    if not bootstrap.is_file():
-        errors.append(f'{bootstrap} not found')
-    if not re.match(r'^[a-z][a-z0-9-]*$', args.app):
-        errors.append('--app must be a lowercase id such as phoneweb')
-    if errors:
-        fail(errors)
-
+def prepare_bootstrap(build):
+    bootstrap = build / BOOTSTRAP_FILE
+    if not (build / INDEX_FILE).is_file() or not bootstrap.is_file():
+        fail([f'{build}: {INDEX_FILE} or {BOOTSTRAP_FILE} not found: run flutter build web first'])
     text = bootstrap.read_text()
-    if '"useLocalCanvasKit":true' not in text:
-        fail(['CanvasKit comes from the Google CDN: build with --no-web-resources-cdn'])
-    text = LOADER_SW_RE.sub('_flutter.loader.load()', text)
+    if LOCAL_CANVASKIT not in text:
+        fail([CDN_CANVASKIT_ERROR])
+    text = drop_flutter_worker(text)
     if registers_flutter_worker(text):
-        fail(['flutter_bootstrap.js still configures the Flutter service worker; use a custom '
-              'web/flutter_bootstrap.js that calls _flutter.loader.load() without it'])
+        fail([f'{BOOTSTRAP_FILE} still configures the Flutter service worker; use a custom '
+              f'web/{BOOTSTRAP_FILE} that calls _flutter.loader.load() without it'])
     if REGISTER_MARKER not in text:
         text = text.rstrip() + '\n\n' + (TEMPLATES / 'register.js').read_text()
     bootstrap.write_text(text)
 
+
+def generate(args):
+    if not re.match(r'^[a-z][a-z0-9-]*$', args.app):
+        fail(['--app must be a lowercase id such as phoneweb'])
+    bad = [o for o in args.runtime_origin or [] if not re.match(r'^https://[a-z0-9.-]+(:[0-9]+)?$', o)]
+    if bad:
+        fail([f'--runtime-origin must be an https origin: {", ".join(bad)}'])
+    build = trusted_dir(args.build_dir)
+    prepare_bootstrap(build)
+
     canvaskit = {name: [p for p in paths if (build / p).is_file()] for name, paths in CANVASKIT.items()}
     precache = shell_files(build)
-    template = (TEMPLATES / 'sw.js').read_text()
+    template = (TEMPLATES / SW_FILE).read_text()
     rev = revision(build, precache + canvaskit['generic'] + canvaskit['chromium'], template)
-    origins = sorted(set(DEFAULT_RUNTIME_ORIGINS + (args.runtime_origin or [])))
-    never = sorted(set(NEVER_CACHE + (args.never_cache or [])))
     values = {
         '__MNSCLOUD_PWA_APP__': args.app,
         '__MNSCLOUD_PWA_REVISION__': rev,
         '__MNSCLOUD_PWA_PRECACHE__': precache,
         '__MNSCLOUD_PWA_CANVASKIT__': canvaskit,
-        '__MNSCLOUD_PWA_RUNTIME_ORIGINS__': origins,
-        '__MNSCLOUD_PWA_NEVER_CACHE__': never,
+        '__MNSCLOUD_PWA_RUNTIME_ORIGINS__': sorted(set(DEFAULT_RUNTIME_ORIGINS + (args.runtime_origin or []))),
+        '__MNSCLOUD_PWA_NEVER_CACHE__': sorted(set(NEVER_CACHE + (args.never_cache or []))),
     }
     for key, value in values.items():
         template = template.replace(key, json.dumps(value))
-    (build / 'sw.js').write_text(template)
+    (build / SW_FILE).write_text(template)
     size = sum((build / p).stat().st_size for p in precache) // 1024
-    log(f'sw.js revision {rev}: {len(precache)} shell files ({size} KiB) + CanvasKit on install')
+    log(f'{SW_FILE} revision {rev}: {len(precache)} shell files ({size} KiB) + CanvasKit on install')
     return 0
 
 
-def check_manifest(build, errors):
-    path = build / 'manifest.json'
+def read_manifest(build, errors):
+    path = build / MANIFEST_FILE
     if not path.is_file():
-        errors.append('manifest.json not found')
-        return
+        errors.append(f'{MANIFEST_FILE} not found')
+        return None
     try:
-        manifest = json.loads(path.read_text())
+        return json.loads(path.read_text())
     except ValueError as error:
-        errors.append(f'manifest.json is not JSON: {error}')
-        return
-    for field in ('name', 'short_name', 'id', 'start_url', 'scope', 'theme_color',
-                  'background_color'):
-        if not manifest.get(field):
-            errors.append(f'manifest.json: missing {field}')
-    for field in ('id', 'start_url', 'scope'):
-        value = str(manifest.get(field, ''))
-        if value.startswith(('/', 'http:', 'https:')):
-            errors.append(f'manifest.json: {field} must be relative (".") to work under any base path')
+        errors.append(f'{MANIFEST_FILE} is not JSON: {error}')
+        return None
+
+
+def check_manifest_fields(manifest, errors):
+    errors.extend(f'{MANIFEST_FILE}: missing {field}' for field in REQUIRED_FIELDS
+                  if not manifest.get(field))
+    errors.extend(f'{MANIFEST_FILE}: {field} must be relative (".") to work under any base path'
+                  for field in RELATIVE_FIELDS
+                  if str(manifest.get(field, '')).startswith(('/', 'http:', 'https:')))
     if manifest.get('display') not in DISPLAY_MODES:
-        errors.append('manifest.json: display must be standalone, fullscreen, minimal-ui or '
+        errors.append(f'{MANIFEST_FILE}: display must be standalone, fullscreen, minimal-ui or '
                       'window-controls-overlay')
     if manifest.get('prefer_related_applications') is True:
-        errors.append('manifest.json: prefer_related_applications blocks installation')
-    icons = manifest.get('icons') or []
+        errors.append(f'{MANIFEST_FILE}: prefer_related_applications blocks installation')
 
-    def has(size, purpose):
-        return any(size in str(icon.get('sizes', '')).split() and
-                   purpose in str(icon.get('purpose', 'any')).split() for icon in icons)
-    for size in ('192x192', '512x512'):
-        if not has(size, 'any'):
-            errors.append(f'manifest.json: no {size} icon with purpose any')
+
+def icon_has(icons, size, purpose):
+    return any(size in str(icon.get('sizes', '')).split() and
+               purpose in str(icon.get('purpose', 'any')).split() for icon in icons)
+
+
+def check_manifest_icons(build, manifest, errors):
+    icons = manifest.get('icons') or []
+    errors.extend(f'{MANIFEST_FILE}: no {size} icon with purpose any'
+                  for size in ('192x192', '512x512') if not icon_has(icons, size, 'any'))
     if not any('maskable' in str(icon.get('purpose', '')).split() for icon in icons):
-        errors.append('manifest.json: no maskable icon')
+        errors.append(f'{MANIFEST_FILE}: no maskable icon')
     for icon in icons:
-        if icon.get('src') and not (build / icon['src']).is_file():
-            errors.append(f'manifest.json: icon {icon["src"]} not found in the build')
+        src = icon.get('src')
+        target = inside(build, src) if src else None
+        if src and (target is None or not target.is_file()):
+            errors.append(f'{MANIFEST_FILE}: icon {src} not found in the build')
 
 
 def check_index(build, base_href, errors):
-    path = build / 'index.html'
+    path = build / INDEX_FILE
     if not path.is_file():
-        errors.append('index.html not found')
+        errors.append(f'{INDEX_FILE} not found')
         return
     html = path.read_text()
-    match = re.search(r'<base\s+href="([^"]*)"', html)
+    match = re.search(r'<base href="([^"]*)"', html)
     if not match or match.group(1) != base_href:
-        errors.append(f'index.html: <base href> must be "{base_href}"')
-    if not re.search(r'<link[^>]+rel="manifest"', html):
-        errors.append('index.html: missing <link rel="manifest">')
-    if not re.search(r'<meta[^>]+name="viewport"', html):
-        errors.append('index.html: missing viewport meta')
-    if not re.search(r'<meta[^>]+name="theme-color"', html):
-        errors.append('index.html: missing theme-color meta')
+        errors.append(f'{INDEX_FILE}: <base href> must be "{base_href}"')
+    for pattern, what in ((r'rel="manifest"', 'manifest link'), (r'name="viewport"', 'viewport meta'),
+                          (r'name="theme-color"', 'theme-color meta')):
+        if not re.search(pattern, html):
+            errors.append(f'{INDEX_FILE}: missing {what}')
+
+
+def check_precache(build, text, errors):
+    match = re.search(r'^const PRECACHE = (\[.*\]);$', text, re.M)
+    precache = json.loads(match.group(1)) if match else []
+    if INDEX_FILE not in precache:
+        errors.append(f'{SW_FILE}: {INDEX_FILE} is not precached')
+    for rel in precache:
+        target = inside(build, rel)
+        if 'api/' in rel or rel in NEVER_CACHE:
+            errors.append(f'{SW_FILE}: {rel} must never be precached')
+        elif target is None or not target.is_file():
+            errors.append(f'{SW_FILE}: precached {rel} is missing from the build')
 
 
 def check_worker(build, errors):
-    sw = build / 'sw.js'
+    sw = build / SW_FILE
     if not sw.is_file():
-        errors.append('sw.js not found: run flutter-pwa.py generate after the build')
+        errors.append(f'{SW_FILE} not found: run flutter-pwa.py generate after the build')
         return
     text = sw.read_text()
     if SW_MARKER not in text or '__MNSCLOUD_PWA_' in text:
-        errors.append('sw.js is not a rendered MNSCloud service worker')
+        errors.append(f'{SW_FILE} is not a rendered MNSCloud service worker')
         return
-    match = re.search(r'^const PRECACHE = (\[.*\]);$', text, re.M)
-    precache = json.loads(match.group(1)) if match else []
-    if 'index.html' not in precache:
-        errors.append('sw.js: index.html is not precached')
-    for rel in precache:
-        if 'api/' in rel or rel in NEVER_CACHE:
-            errors.append(f'sw.js: {rel} must never be precached')
-        elif not (build / rel).is_file():
-            errors.append(f'sw.js: precached {rel} is missing from the build')
-    bootstrap = build / 'flutter_bootstrap.js'
+    check_precache(build, text, errors)
+    bootstrap = build / BOOTSTRAP_FILE
     boot = bootstrap.read_text() if bootstrap.is_file() else ''
     if REGISTER_MARKER not in boot:
-        errors.append('flutter_bootstrap.js does not register sw.js')
+        errors.append(f'{BOOTSTRAP_FILE} does not register {SW_FILE}')
     if registers_flutter_worker(boot):
-        errors.append('flutter_bootstrap.js still registers the deprecated Flutter service worker')
-    if '"useLocalCanvasKit":true' not in boot:
-        errors.append('CanvasKit comes from the Google CDN: build with --no-web-resources-cdn')
+        errors.append(f'{BOOTSTRAP_FILE} still registers the deprecated Flutter service worker')
+    if LOCAL_CANVASKIT not in boot:
+        errors.append(CDN_CANVASKIT_ERROR)
 
 
 def validate(args):
-    build = Path(args.build_dir)
+    build = trusted_dir(args.build_dir)
     errors = []
-    check_manifest(build, errors)
+    manifest = read_manifest(build, errors)
+    if manifest is not None:
+        check_manifest_fields(manifest, errors)
+        check_manifest_icons(build, manifest, errors)
     check_index(build, args.base_href, errors)
     check_worker(build, errors)
     if errors:
         fail(errors)
-    log(f'{build}: PWA contract OK')
+    log(f'{args.build_dir}: PWA contract OK')
     return 0
 
 

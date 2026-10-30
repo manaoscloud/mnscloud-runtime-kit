@@ -16,6 +16,7 @@ Only platforms whose folder exists are checked. Usage, from the repository root:
   check-flutter-native.py --android-permission RECORD_AUDIO --ios-plist-key NSMicrophoneUsageDescription
 """
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -23,6 +24,17 @@ from pathlib import Path
 # Flutter 3.47 minimums (Xcode 27 support); raise together with toolchains/flutter.json.
 DEFAULT_MIN_IOS = '15.0'
 DEFAULT_MIN_MACOS = '12.0'
+
+
+def trusted_root(path):
+    """The project root is accepted only at or under the current directory (no traversal)."""
+    base = os.path.realpath(os.getcwd())
+    resolved = os.path.realpath(path)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        print(f'[mnscloud-runtime-kit/flutter-native] ERROR: {path}: outside the current directory',
+              file=sys.stderr)
+        sys.exit(1)
+    return Path(resolved)
 
 
 def version_key(value):
@@ -85,7 +97,7 @@ def main(argv):
     parser.add_argument('--min-macos', default=DEFAULT_MIN_MACOS)
     args = parser.parse_args(argv)
 
-    root = Path(args.root)
+    root = trusted_root(args.root)
     errors = []
     checked = []
     if (root / 'android').is_dir():

@@ -61,7 +61,9 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'MNSCLOUD_PWA_SKIP_WAITING') self.skipWaiting();
+  // Only pages of this origin may activate a waiting revision.
+  if (event.origin !== self.location.origin) return;
+  if (event.data?.type === 'MNSCLOUD_PWA_SKIP_WAITING') self.skipWaiting();
 });
 
 async function cacheFirst(request, key) {

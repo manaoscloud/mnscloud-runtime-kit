@@ -77,27 +77,33 @@ class FlutterToolchainTest(unittest.TestCase):
                                   'dart_sdk_version': '9.9.9 (build 1)',
                                   'release_date': '2030-01-02T03:04:05Z'}]}))
             write(f'{major}.{minor}.{patch + 1}')
-            newer = run(TOOLCHAIN, 'compare', str(releases))
+            newer = run(TOOLCHAIN, 'compare', 'releases.json', cwd=folder)
             self.assertEqual(newer.returncode, 10, newer.stderr)
             self.assertEqual(json.loads(newer.stdout)['latest']['dart'], '9.9.9')
             write(pinned)
-            self.assertEqual(run(TOOLCHAIN, 'compare', str(releases)).returncode, 0)
+            self.assertEqual(run(TOOLCHAIN, 'compare', 'releases.json', cwd=folder).returncode, 0)
+
+    def test_release_list_outside_the_directory_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = run(TOOLCHAIN, 'compare', '../../etc/passwd', cwd=folder)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('not a file under the current directory', result.stderr)
 
 
 class FlutterPwaTest(unittest.TestCase):
     def test_raw_flutter_build_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder)
-            result = run(PWA, 'validate', '--build-dir', str(build))
+            result = run(PWA, 'validate', '--build-dir', 'build/web', cwd=folder)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('sw.js not found', result.stderr)
 
     def test_generate_produces_a_valid_app_shell_worker(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder)
-            result = run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            result = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             self.assertEqual(result.returncode, 0, result.stderr)
-            validated = run(PWA, 'validate', '--build-dir', str(build))
+            validated = run(PWA, 'validate', '--build-dir', 'build/web', cwd=folder)
             self.assertEqual(validated.returncode, 0, validated.stderr)
 
             boot = (build / 'flutter_bootstrap.js').read_text()
@@ -115,23 +121,23 @@ class FlutterPwaTest(unittest.TestCase):
                 self.assertNotIn(excluded, precache)
             self.assertIn('canvaskit/chromium/canvaskit.wasm', sw)
 
-            again = run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            again = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             self.assertEqual(again.returncode, 0, again.stderr)
             self.assertEqual((build / 'flutter_bootstrap.js').read_text().count('mnscloud-pwa-register v1'), 1)
 
     def test_revision_changes_with_content(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder)
-            run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             first = (build / 'sw.js').read_text()
             (build / 'main.dart.js').write_text('// app v2')
-            run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             self.assertNotEqual(first, (build / 'sw.js').read_text())
 
     def test_cdn_canvaskit_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder, bootstrap=BOOTSTRAP.replace('"useLocalCanvasKit":true', '"x":1'))
-            result = run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            result = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('--no-web-resources-cdn', result.stderr)
 
@@ -140,18 +146,25 @@ class FlutterPwaTest(unittest.TestCase):
         manifest.pop('id')
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder, manifest=manifest)
-            run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
-            result = run(PWA, 'validate', '--build-dir', str(build))
+            run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
+            result = run(PWA, 'validate', '--build-dir', 'build/web', cwd=folder)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('missing id', result.stderr)
             self.assertIn('scope must be relative', result.stderr)
             self.assertIn('display must be', result.stderr)
 
+    def test_build_dir_outside_the_directory_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            make_build(folder)
+            result = run(PWA, 'validate', '--build-dir', '/etc', cwd=folder)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('not a directory under the current directory', result.stderr)
+
     @unittest.skipUnless(shutil.which('node'), 'node not installed')
     def test_generated_javascript_parses(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder)
-            run(PWA, 'generate', '--build-dir', str(build), '--app', 'demo')
+            run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             for name in ('sw.js', 'flutter_bootstrap.js'):
                 result = subprocess.run(['node', '--check', str(build / name)], capture_output=True,
                                         text=True, timeout=30)
@@ -180,14 +193,14 @@ class FlutterNativeTest(unittest.TestCase):
     def test_complete_project_passes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = self.make_project(folder)
-            result = run(NATIVE, '--root', str(root), '--ios-plist-key', 'NSCameraUsageDescription')
+            result = run(NATIVE, '--ios-plist-key', 'NSCameraUsageDescription', cwd=root)
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_template_gaps_fail(self):
         with tempfile.TemporaryDirectory() as folder:
             root = self.make_project(folder, internet=False, network=False, ios_target='13.0')
-            result = run(NATIVE, '--root', str(root), '--android-permission', 'RECORD_AUDIO',
-                         '--ios-plist-key', 'NSMicrophoneUsageDescription')
+            result = run(NATIVE, '--android-permission', 'RECORD_AUDIO',
+                         '--ios-plist-key', 'NSMicrophoneUsageDescription', cwd=root)
             self.assertNotEqual(result.returncode, 0)
             for expected in ('android.permission.INTERNET', 'android.permission.RECORD_AUDIO',
                              'network.client', 'IPHONEOS_DEPLOYMENT_TARGET 13.0',
