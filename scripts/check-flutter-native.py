@@ -28,8 +28,8 @@ DEFAULT_MIN_MACOS = '12.0'
 
 def trusted_root(path):
     """The project root is accepted only at or under the current directory (no traversal)."""
-    base = os.path.realpath(os.getcwd())
-    resolved = os.path.realpath(path)
+    base = os.path.abspath(os.getcwd())
+    resolved = os.path.normpath(os.path.join(base, path))
     if resolved != base and not resolved.startswith(base + os.sep):
         print(f'[mnscloud-runtime-kit/flutter-native] ERROR: {path}: outside the current directory',
               file=sys.stderr)
@@ -37,7 +37,7 @@ def trusted_root(path):
     return Path(resolved)
 
 
-def version_key(value):
+def version_tuple(value):
     return tuple(int(part) for part in value.split('.'))
 
 
@@ -66,23 +66,23 @@ def check_macos(root, entitlements, minimum, errors):
     project = root / 'macos/Runner.xcodeproj/project.pbxproj'
     if project.is_file():
         for found in set(re.findall(r'MACOSX_DEPLOYMENT_TARGET = ([0-9.]+);', project.read_text())):
-            if version_key(found) < version_key(minimum):
+            if version_tuple(found) < version_tuple(minimum):
                 errors.append(f'{project}: MACOSX_DEPLOYMENT_TARGET {found} < {minimum}')
 
 
-def check_ios(root, keys, minimum, errors):
+def check_ios(root, entries, minimum, errors):
     plist = root / 'ios/Runner/Info.plist'
     if not plist.is_file():
         errors.append(f'{plist} not found')
         return
     text = plist.read_text()
-    for key in keys:
-        if f'<key>{key}</key>' not in text:
-            errors.append(f'{plist}: {key} missing')
+    for entry in entries:
+        if f'<key>{entry}</key>' not in text:
+            errors.append(f'{plist}: {entry} missing')
     project = root / 'ios/Runner.xcodeproj/project.pbxproj'
     if project.is_file():
         for found in set(re.findall(r'IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);', project.read_text())):
-            if version_key(found) < version_key(minimum):
+            if version_tuple(found) < version_tuple(minimum):
                 errors.append(f'{project}: IPHONEOS_DEPLOYMENT_TARGET {found} < {minimum}')
 
 
@@ -92,7 +92,7 @@ def main(argv):
     parser.add_argument('--android-permission', action='append', default=[],
                         help='extra permission without the android.permission. prefix')
     parser.add_argument('--macos-entitlement', action='append', default=[])
-    parser.add_argument('--ios-plist-key', action='append', default=[])
+    parser.add_argument('--ios-plist-key', dest='ios_plist_entries', action='append', default=[])
     parser.add_argument('--min-ios', default=DEFAULT_MIN_IOS)
     parser.add_argument('--min-macos', default=DEFAULT_MIN_MACOS)
     args = parser.parse_args(argv)
@@ -108,7 +108,7 @@ def main(argv):
         check_macos(root, args.macos_entitlement, args.min_macos, errors)
     if (root / 'ios').is_dir():
         checked.append('ios')
-        check_ios(root, args.ios_plist_key, args.min_ios, errors)
+        check_ios(root, args.ios_plist_entries, args.min_ios, errors)
     for error in errors:
         print(f'[mnscloud-runtime-kit/flutter-native] ERROR: {error}', file=sys.stderr)
     if errors:

@@ -26,7 +26,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.path.abspath(__file__)).parents[1]
 TEMPLATES = ROOT / 'templates' / 'pwa'
 SW_FILE = 'sw.js'
 INDEX_FILE = 'index.html'
@@ -70,8 +70,8 @@ def fail(errors):
 
 def trusted_dir(path):
     """The build directory is accepted only under the current directory (no traversal)."""
-    base = os.path.realpath(os.getcwd())
-    resolved = os.path.realpath(path)
+    base = os.path.abspath(os.getcwd())
+    resolved = os.path.normpath(os.path.join(base, path))
     if not resolved.startswith(base + os.sep) or not os.path.isdir(resolved):
         fail([f'{path}: not a directory under the current directory'])
     return Path(resolved)
@@ -79,7 +79,7 @@ def trusted_dir(path):
 
 def inside(build, rel):
     """A path named by a build file (manifest icon, precache entry) must stay in the build."""
-    resolved = os.path.realpath(os.path.join(build, rel))
+    resolved = os.path.normpath(os.path.join(build, rel))
     return Path(resolved) if resolved.startswith(str(build) + os.sep) else None
 
 
@@ -141,7 +141,7 @@ def prepare_bootstrap(build):
 def generate(args):
     if not re.match(r'^[a-z][a-z0-9-]*$', args.app):
         fail(['--app must be a lowercase id such as phoneweb'])
-    bad = [o for o in args.runtime_origin or [] if not re.match(r'^https://[a-z0-9.-]+(:[0-9]+)?$', o)]
+    bad = [o for o in args.runtime_origin or [] if not re.match(r'^https://[a-z0-9.-]+(:\d+)?$', o)]
     if bad:
         fail([f'--runtime-origin must be an https origin: {", ".join(bad)}'])
     build = trusted_dir(args.build_dir)
@@ -159,8 +159,8 @@ def generate(args):
         '__MNSCLOUD_PWA_RUNTIME_ORIGINS__': sorted(set(DEFAULT_RUNTIME_ORIGINS + (args.runtime_origin or []))),
         '__MNSCLOUD_PWA_NEVER_CACHE__': sorted(set(NEVER_CACHE + (args.never_cache or []))),
     }
-    for key, value in values.items():
-        template = template.replace(key, json.dumps(value))
+    for placeholder, value in values.items():
+        template = template.replace(placeholder, json.dumps(value))
     (build / SW_FILE).write_text(template)
     size = sum((build / p).stat().st_size for p in precache) // 1024
     log(f'{SW_FILE} revision {rev}: {len(precache)} shell files ({size} KiB) + CanvasKit on install')

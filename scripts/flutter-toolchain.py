@@ -20,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.path.abspath(__file__)).parents[1]
 TOOLCHAIN = ROOT / 'toolchains' / 'flutter.json'
 RELEASES_URL = 'https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json'
 VERSION_RE = re.compile(r'^\d+\.\d+\.\d+$')
@@ -35,8 +35,8 @@ def fail(message):
 
 def trusted_file(path):
     """A file argument is accepted only inside the current directory (no traversal)."""
-    base = os.path.realpath(os.getcwd())
-    resolved = os.path.realpath(path)
+    base = os.path.abspath(os.getcwd())
+    resolved = os.path.normpath(os.path.join(base, path))
     if not resolved.startswith(base + os.sep) or not os.path.isfile(resolved):
         fail(f'{path}: not a file under the current directory')
     return Path(resolved)
@@ -52,7 +52,7 @@ def load():
     return data
 
 
-def version_key(version):
+def version_tuple(version):
     return tuple(int(part) for part in version.split('.'))
 
 
@@ -106,7 +106,7 @@ def command_compare(args):
     pinned = load()
     newest = latest(pinned['channel'], args[0] if args else None)
     print(json.dumps({'pinned': pinned['flutter'], 'latest': newest}))
-    return 10 if version_key(newest['flutter']) > version_key(pinned['flutter']) else 0
+    return 10 if version_tuple(newest['flutter']) > version_tuple(pinned['flutter']) else 0
 
 
 COMMANDS = {'get': command_get, 'latest': command_latest, 'set': command_set,
