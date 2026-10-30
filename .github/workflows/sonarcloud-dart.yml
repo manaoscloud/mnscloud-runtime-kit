@@ -15,6 +15,10 @@ on:
         description: "Extra comma-separated sonar.exclusions patterns (vendored or generated code)."
         type: string
         default: ""
+      runtime_kit_ref:
+        description: "mnscloud-runtime-kit ref that supplies toolchains/flutter.json."
+        type: string
+        default: "main"
     secrets:
       SONAR_TOKEN:
         required: false
@@ -46,11 +50,32 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Checkout runtime kit toolchain
+        if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/flutter-toolchain.py
+            toolchains/flutter.json
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve Flutter toolchain
+        id: flutter
+        if: steps.token.outputs.present == 'true'
+        run: |
+          echo "version=$(python3 .mnscloud-runtime-kit/scripts/flutter-toolchain.py get flutter)" >> "$GITHUB_OUTPUT"
+          echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+
       - name: Setup Flutter
         if: steps.token.outputs.present == 'true'
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          flutter-version: ${{ steps.flutter.outputs.version }}
 
       - name: Resolve packages
         if: steps.token.outputs.present == 'true'
@@ -69,4 +94,4 @@ jobs:
             -Dsonar.tests=test
             -Dsonar.test.inclusions=test/**
             -Dsonar.coverage.exclusions=**/*
-            -Dsonar.exclusions=test/**,build/**,.dart_tool/**,**/*.g.dart,**/*.freezed.dart,**/generated_plugin_registrant.*${{ inputs.exclusions != '' && format(',{0}', inputs.exclusions) || '' }}
+            -Dsonar.exclusions=test/**,build/**,.dart_tool/**,.mnscloud-runtime-kit/**,**/*.g.dart,**/*.freezed.dart,**/generated_plugin_registrant.*${{ inputs.exclusions != '' && format(',{0}', inputs.exclusions) || '' }}

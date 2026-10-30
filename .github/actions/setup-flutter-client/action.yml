@@ -1,0 +1,46 @@
+name: Setup MNSCloud Flutter client
+description: >-
+  Installs the Flutter release pinned in toolchains/flutter.json of the runtime kit checked out at
+  `runtime-kit-path` (or an explicit version) and resolves the client packages from its lockfile.
+inputs:
+  runtime-kit-path:
+    description: Checkout of mnscloud-runtime-kit inside the workspace.
+    default: .mnscloud-runtime-kit
+  flutter-version:
+    description: Explicit Flutter version; empty uses toolchains/flutter.json.
+    default: ""
+  pub-get:
+    description: Run `flutter pub get --enforce-lockfile`.
+    default: "true"
+outputs:
+  flutter-version:
+    description: Installed Flutter version.
+    value: ${{ steps.version.outputs.flutter }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve Flutter toolchain
+      id: version
+      shell: bash
+      env:
+        REQUESTED: ${{ inputs.flutter-version }}
+        KIT: ${{ inputs.runtime-kit-path }}
+      run: |
+        set -euo pipefail
+        version="${REQUESTED:-$(python3 "$KIT/scripts/flutter-toolchain.py" get flutter)}"
+        channel="$(python3 "$KIT/scripts/flutter-toolchain.py" get channel)"
+        echo "flutter=$version" >> "$GITHUB_OUTPUT"
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+        echo "Flutter toolchain: $version ($channel)"
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      with:
+        channel: ${{ steps.version.outputs.channel }}
+        flutter-version: ${{ steps.version.outputs.flutter }}
+        cache: true
+
+    - name: Resolve packages
+      if: ${{ inputs.pub-get == 'true' }}
+      shell: bash
+      run: flutter pub get --enforce-lockfile

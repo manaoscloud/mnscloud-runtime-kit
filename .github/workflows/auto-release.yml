@@ -43,7 +43,7 @@ on:
         type: string
         default: "stable"
       flutter_version:
-        description: "Optional pinned Flutter version used when setup_flutter is true. Empty uses the latest of flutter_channel."
+        description: "Optional Flutter version used when setup_flutter is true. Empty uses toolchains/flutter.json of the runtime kit (the pinned latest stable)."
         required: false
         type: string
         default: ""
@@ -94,7 +94,10 @@ jobs:
           repository: manaoscloud/mnscloud-runtime-kit
           ref: ${{ inputs.runtime_kit_ref }}
           path: .mnscloud-runtime-kit
-          sparse-checkout: scripts/notify-release-cache.sh
+          sparse-checkout: |
+            scripts/notify-release-cache.sh
+            scripts/flutter-toolchain.py
+            toolchains/flutter.json
           sparse-checkout-cone-mode: false
 
       - name: Ignore auxiliary runtime kit checkout
@@ -160,12 +163,25 @@ jobs:
         if: ${{ inputs.setup_node }}
         run: npm ci --ignore-scripts
 
+      - name: Resolve Flutter toolchain
+        id: flutter
+        if: ${{ inputs.setup_flutter }}
+        env:
+          REQUESTED: ${{ inputs.flutter_version }}
+        run: |
+          set -euo pipefail
+          # toolchains/flutter.json pins the latest stable (moved weekly by flutter-toolchain-bump),
+          # so a release is reproducible and a new Flutter never reaches a release unvalidated.
+          version="${REQUESTED:-$(python3 .mnscloud-runtime-kit/scripts/flutter-toolchain.py get flutter)}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Flutter toolchain: $version"
+
       - name: Setup Flutter
         if: ${{ inputs.setup_flutter }}
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: ${{ inputs.flutter_channel }}
-          flutter-version: ${{ inputs.flutter_version }}
+          flutter-version: ${{ steps.flutter.outputs.version }}
           cache: true
 
       - name: Configure git author

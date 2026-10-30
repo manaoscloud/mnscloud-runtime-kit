@@ -1,0 +1,158 @@
+name: Flutter toolchain bump
+
+# Keeps every MNSCloud Flutter client on the latest Flutter stable without unvalidated upgrades:
+# weekly (and on demand) it compares toolchains/flutter.json with the newest stable; when a newer
+# one exists it validates each client against it (pub get, analyze, test, web build), pushes the
+# branch chore/flutter-toolchain-<x-y-z> with the new pin and opens a pull request. When this
+# repository does not allow GitHub Actions to create pull requests, it opens an issue with the
+# same branch and results instead. The PR is merged like any other with scripts/ops/merge.sh
+# (task slug flutter-toolchain-<x-y-z>); clients use the new toolchain from their next run.
+on:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report; do not push a branch or open a pull request/issue."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-toolchain-bump
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      newer: ${{ steps.compare.outputs.newer }}
+      flutter: ${{ steps.compare.outputs.flutter }}
+      dart: ${{ steps.compare.outputs.dart }}
+      released: ${{ steps.compare.outputs.released }}
+      pinned: ${{ steps.compare.outputs.pinned }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compare with the latest stable
+        id: compare
+        run: |
+          set -euo pipefail
+          status=0
+          result="$(python3 scripts/flutter-toolchain.py compare)" || status=$?
+          [ "$status" -eq 0 ] || [ "$status" -eq 10 ] || exit "$status"
+          echo "$result"
+          python3 - "$result" "$status" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          data = json.loads(sys.argv[1])
+          print(f"newer={'true' if sys.argv[2] == '10' else 'false'}")
+          print(f"pinned={data['pinned']}")
+          print(f"flutter={data['latest']['flutter']}")
+          print(f"dart={data['latest']['dart']}")
+          print(f"released={data['latest']['releasedAt']}")
+          PY
+
+  validate:
+    needs: check
+    if: ${{ needs.check.outputs.newer == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [mnscloud-phoneweb, mnscloud-pulse, mnscloud-pos, mnscloud-infragis-mobile]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/${{ matrix.client }}
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ needs.check.outputs.flutter }}
+          cache: true
+      - name: Validate
+        id: run
+        run: |
+          set -uo pipefail
+          result=pass
+          {
+            flutter pub get --enforce-lockfile && flutter analyze && flutter test &&
+            if [ -d web ]; then flutter build web --release --base-href / --no-web-resources-cdn; fi
+          } || result=fail
+          echo "${{ matrix.client }}: $result" > "result-${{ matrix.client }}.txt"
+          [ "$result" = pass ]
+      - name: Keep result
+        if: ${{ always() }}
+        run: |
+          [ -f "result-${{ matrix.client }}.txt" ] || echo "${{ matrix.client }}: fail" > "result-${{ matrix.client }}.txt"
+      - uses: actions/upload-artifact@v5
+        if: ${{ always() }}
+        with:
+          name: result-${{ matrix.client }}
+          path: result-${{ matrix.client }}.txt
+
+  propose:
+    needs: [check, validate]
+    if: ${{ always() && needs.check.outputs.newer == 'true' && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FLUTTER: ${{ needs.check.outputs.flutter }}
+      DART: ${{ needs.check.outputs.dart }}
+      RELEASED: ${{ needs.check.outputs.released }}
+      PINNED: ${{ needs.check.outputs.pinned }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: result-*
+          merge-multiple: true
+      - name: Push branch and open pull request
+        run: |
+          set -euo pipefail
+          slug="flutter-toolchain-${FLUTTER//./-}"
+          branch="chore/${slug}"
+          results="$(cat result-*.txt 2>/dev/null | sed 's/^/- /' || echo '- no results')"
+          python3 scripts/flutter-toolchain.py set "$FLUTTER" "$DART" "$RELEASED"
+          git config user.name "mnscloud-release-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -B "$branch"
+          git commit -am "chore(flutter): pin toolchain to Flutter ${FLUTTER}"
+          git push --force origin "$branch"
+          body="$(cat <<EOF
+          ## Summary
+
+          Moves \`toolchains/flutter.json\` from Flutter ${PINNED} to the latest stable **${FLUTTER}**
+          (Dart ${DART}, released ${RELEASED}). Every MNSCloud Flutter client uses it from its next CI
+          and release run.
+
+          Validation of each client at \`main\` against ${FLUTTER} (pub get, analyze, test, web build):
+
+          ${results}
+
+          A failing client needs its own fix (lockfile, deprecations) before or right after this merge.
+          Merge with \`scripts/ops/merge.sh mnscloud-runtime-kit <pr> ${slug}\`.
+
+          ## Release note
+
+          visibility: internal
+          EOF
+          )"
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+          elif ! gh pr create --head "$branch" --base main \
+              --title "chore(flutter): pin toolchain to Flutter ${FLUTTER}" --body "$body"; then
+            echo "::warning::Actions may not create pull requests here; opening an issue instead."
+            title="Flutter ${FLUTTER} available: branch ${branch} ready"
+            if [ -z "$(gh issue list --state open --search "in:title \"${title}\"" --json number --jq '.[0].number // empty')" ]; then
+              gh issue create --title "$title" --body "$(printf '%s\n\nOpen the pull request from `%s`.\n' "$body" "$branch")"
+            fi
+          fi

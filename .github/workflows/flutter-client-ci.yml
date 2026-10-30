@@ -1,0 +1,202 @@
+name: Flutter client CI
+
+# Reusable pull request gate for every MNSCloud Flutter client (PhoneWeb, Pulse, POS, InfraGIS
+# Mobile and the next ones). One place pins the toolchain (toolchains/flutter.json) and the checks:
+#   - analyze, test and the native configuration check (scripts/check-flutter-native.py);
+#   - one build per declared target, so a target that stops compiling fails the PR, not the release;
+#   - web: the PWA contract (scripts/flutter-pwa.py) or the repository's own web check.
+# Apple builds (macOS, iOS without signing) run on macOS runners, about ten times the cost of
+# Linux minutes: callers enable them on release branches or a nightly schedule, not on every PR.
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: "Comma-separated targets to build: web, android, linux, windows, macos, ios."
+        type: string
+        default: "web,android"
+      web_mode:
+        description: "pwa (MNSCloud service worker + validation) or plain (build only)."
+        type: string
+        default: "pwa"
+      pwa_app:
+        description: "PWA app id for the service worker cache (default: repository name without mnscloud-)."
+        type: string
+        default: ""
+      web_check:
+        description: "Extra command run after the web build (repository-specific web rule)."
+        type: string
+        default: ""
+      native_check_args:
+        description: "Extra arguments for scripts/check-flutter-native.py (--android-permission X ...)."
+        type: string
+        default: ""
+      linux_packages:
+        description: "Extra apt packages for the Linux desktop build (plugin dependencies)."
+        type: string
+        default: ""
+      java_version:
+        description: "Temurin JDK for the Android build."
+        type: string
+        default: "17"
+      apple:
+        description: "Build the macos/ios targets listed in `targets` (macOS runner)."
+        type: boolean
+        default: false
+      runtime_kit_ref:
+        description: "mnscloud-runtime-kit ref that supplies the toolchain and the scripts."
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze, test and native config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - name: Native configuration
+        env:
+          ARGS: ${{ inputs.native_check_args }}
+        run: |
+          # shellcheck disable=SC2086 # ARGS is a list of flags
+          python3 .mnscloud-runtime-kit/scripts/check-flutter-native.py $ARGS
+      - run: flutter analyze
+      - run: flutter test
+
+  web:
+    name: Build web
+    if: ${{ contains(format(',{0},', inputs.targets), ',web,') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - run: flutter build web --release --base-href / --no-web-resources-cdn
+      - name: PWA service worker and contract
+        if: ${{ inputs.web_mode == 'pwa' }}
+        env:
+          APP: ${{ inputs.pwa_app || github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          app="${APP#mnscloud-}"
+          python3 .mnscloud-runtime-kit/scripts/flutter-pwa.py generate --build-dir build/web --app "$app"
+          python3 .mnscloud-runtime-kit/scripts/flutter-pwa.py validate --build-dir build/web --base-href /
+      - name: Repository web check
+        if: ${{ inputs.web_check != '' }}
+        run: ${{ inputs.web_check }}
+
+  android:
+    name: Build Android
+    if: ${{ contains(format(',{0},', inputs.targets), ',android,') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - run: flutter build apk --debug
+
+  linux:
+    name: Build Linux
+    if: ${{ contains(format(',{0},', inputs.targets), ',linux,') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - name: Linux desktop dependencies
+        env:
+          EXTRA: ${{ inputs.linux_packages }}
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086 # EXTRA is a package list
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libstdc++-12-dev $EXTRA
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - run: flutter build linux --release
+
+  windows:
+    name: Build Windows
+    if: ${{ contains(format(',{0},', inputs.targets), ',windows,') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        shell: bash
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - run: flutter build windows --release
+
+  apple:
+    name: Build macOS and iOS
+    if: ${{ inputs.apple && (contains(format(',{0},', inputs.targets), ',macos,') || contains(format(',{0},', inputs.targets), ',ios,')) }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: manaoscloud/mnscloud-runtime-kit
+          ref: ${{ inputs.runtime_kit_ref }}
+          path: .mnscloud-runtime-kit
+          persist-credentials: false
+      - name: Ignore runtime kit checkout
+        run: echo ".mnscloud-runtime-kit/" >> .git/info/exclude
+      - uses: ./.mnscloud-runtime-kit/.github/actions/setup-flutter-client
+      - name: Build macOS
+        if: ${{ contains(format(',{0},', inputs.targets), ',macos,') }}
+        run: flutter build macos --release
+      - name: Build iOS (no signing)
+        if: ${{ contains(format(',{0},', inputs.targets), ',ios,') }}
+        run: flutter build ios --release --no-codesign
