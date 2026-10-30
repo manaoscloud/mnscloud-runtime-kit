@@ -128,6 +128,19 @@ class FlutterPwaTest(unittest.TestCase):
             self.assertEqual(again.returncode, 0, again.stderr)
             self.assertEqual((build / 'flutter_bootstrap.js').read_text().count('mnscloud-pwa-register v1'), 1)
 
+    def test_extra_precache_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            build = make_build(folder)
+            (build / 'sqlite3mc.wasm').write_bytes(b'wasm')
+            result = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo',
+                         '--precache', 'sqlite3mc.wasm', cwd=folder)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"sqlite3mc.wasm"', (build / 'sw.js').read_text())
+            self.assertEqual(run(PWA, 'validate', '--build-dir', 'build/web', cwd=folder).returncode, 0)
+            refused = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo',
+                          '--precache', 'version.json', cwd=folder)
+            self.assertNotEqual(refused.returncode, 0)
+
     def test_revision_changes_with_content(self):
         with tempfile.TemporaryDirectory() as folder:
             build = make_build(folder)
