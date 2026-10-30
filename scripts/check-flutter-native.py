@@ -26,7 +26,7 @@ DEFAULT_MIN_IOS = '15.0'
 DEFAULT_MIN_MACOS = '12.0'
 
 
-def trusted_root(path):
+def confined_root(path):
     """The project root is accepted only at or under the current directory (no traversal)."""
     base = os.path.abspath(os.getcwd())
     resolved = os.path.normpath(os.path.join(base, path))
@@ -97,7 +97,7 @@ def main(argv):
     parser.add_argument('--min-macos', default=DEFAULT_MIN_MACOS)
     args = parser.parse_args(argv)
 
-    root = trusted_root(args.root)
+    root = confined_root(args.root)
     errors = []
     checked = []
     if (root / 'android').is_dir():

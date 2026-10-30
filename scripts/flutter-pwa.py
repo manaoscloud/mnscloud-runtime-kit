@@ -68,7 +68,7 @@ def fail(errors):
     sys.exit(1)
 
 
-def trusted_dir(path):
+def confined_dir(path):
     """The build directory is accepted only under the current directory (no traversal)."""
     base = os.path.abspath(os.getcwd())
     resolved = os.path.normpath(os.path.join(base, path))
@@ -135,7 +135,8 @@ def prepare_bootstrap(build):
               f'web/{BOOTSTRAP_FILE} that calls _flutter.loader.load() without it'])
     if REGISTER_MARKER not in text:
         text = text.rstrip() + '\n\n' + (TEMPLATES / 'register.js').read_text()
-    bootstrap.write_text(text)
+    with open(bootstrap, 'w', encoding='utf-8') as handle:
+        handle.write(text)
 
 
 def generate(args):
@@ -144,7 +145,7 @@ def generate(args):
     bad = [o for o in args.runtime_origin or [] if not re.match(r'^https://[a-z0-9.-]+(:\d+)?$', o)]
     if bad:
         fail([f'--runtime-origin must be an https origin: {", ".join(bad)}'])
-    build = trusted_dir(args.build_dir)
+    build = confined_dir(args.build_dir)
     prepare_bootstrap(build)
 
     canvaskit = {name: [p for p in paths if (build / p).is_file()] for name, paths in CANVASKIT.items()}
@@ -259,7 +260,7 @@ def check_worker(build, errors):
 
 
 def validate(args):
-    build = trusted_dir(args.build_dir)
+    build = confined_dir(args.build_dir)
     errors = []
     manifest = read_manifest(build, errors)
     if manifest is not None:

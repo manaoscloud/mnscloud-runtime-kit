@@ -33,7 +33,7 @@ def fail(message):
     sys.exit(1)
 
 
-def trusted_file(path):
+def confined_file(path):
     """A file argument is accepted only inside the current directory (no traversal)."""
     base = os.path.abspath(os.getcwd())
     resolved = os.path.normpath(os.path.join(base, path))
@@ -58,7 +58,7 @@ def version_tuple(version):
 
 def release_list(source=None):
     if source:
-        return json.loads(trusted_file(source).read_text())
+        return json.loads(confined_file(source).read_text())
     with urllib.request.urlopen(RELEASES_URL, timeout=30) as response:
         return json.load(response)
 
@@ -98,7 +98,9 @@ def command_set(args):
         fail('set needs x.y.z versions and a YYYY-MM-DD date')
     data = load()
     data.update({'flutter': flutter, 'dart': dart, 'releasedAt': released_at})
-    TOOLCHAIN.write_text(json.dumps(data, indent=2) + '\n')
+    with open(TOOLCHAIN, 'w', encoding='utf-8') as handle:
+        json.dump(data, handle, indent=2)
+        handle.write('\n')
     return 0
 
 
