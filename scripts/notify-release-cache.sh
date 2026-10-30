@@ -57,6 +57,7 @@ supported_products = {
     "mnscloud-phoneweb",
     "mnscloud-pulse",
     "mnscloud-pos",
+    "mnscloud-infragis-mobile",
     "mnscloud-customer-portal",
     "mnscloud-website",
 }
