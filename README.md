@@ -273,7 +273,12 @@ InfraGIS Mobile and new ones). The workspace contract that tells when to use eac
   and appends `templates/pwa/register.js`, which exposes:
   - `window.mnscloudPwa.applyUpdate()`: the "Update now" action of the new-version notice
     (activates the waiting revision, then reloads);
-  - `window.mnscloudPwa.persistStorage()`.
+  - `window.mnscloudPwa.persistStorage()`;
+  - the install API of the client's "Install app" button: `installState()` (`installed`,
+    `available`, `ios`, `unavailable`), `promptInstall()` (`accepted`, `dismissed`,
+    `unavailable`) and `onInstallChange(listener)`. Chromium browsers fire `beforeinstallprompt`,
+    which the script keeps for the button. iOS/iPadOS Safari installs only from Share → Add to
+    Home Screen, so on `ios` the app shows those steps.
 
   `validate` checks the manifest (relative `id`/`scope`/`start_url`, display, 192/512 and maskable
   icons), `index.html` (base href, manifest link, viewport, theme-color), the worker and the local
