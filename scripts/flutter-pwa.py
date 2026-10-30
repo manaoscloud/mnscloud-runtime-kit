@@ -150,6 +150,14 @@ def generate(args):
 
     canvaskit = {name: [p for p in paths if (build / p).is_file()] for name, paths in CANVASKIT.items()}
     precache = shell_files(build)
+    for rel in args.precache or []:
+        target = inside(build, rel)
+        if target is None or not target.is_file():
+            fail([f'--precache {rel}: not a file of the build'])
+        if rel in NEVER_CACHE or 'api/' in rel:
+            fail([f'--precache {rel}: must never be precached'])
+        if rel not in precache:
+            precache.append(rel)
     template = (TEMPLATES / SW_FILE).read_text()
     rev = revision(build, precache + canvaskit['generic'] + canvaskit['chromium'], template)
     values = {
@@ -283,6 +291,8 @@ def main(argv):
     gen.add_argument('--runtime-origin', action='append',
                      help='extra https origin cached on first use (fonts, map styles)')
     gen.add_argument('--never-cache', action='append', help='extra file never served from cache')
+    gen.add_argument('--precache', action='append',
+                     help='extra build file the app needs offline (for example a database .wasm)')
     val = sub.add_parser('validate')
     val.add_argument('--build-dir', default='build/web')
     val.add_argument('--base-href', default='/')

@@ -267,7 +267,8 @@ InfraGIS Mobile and new ones). The workspace contract that tells when to use eac
   - It never caches `/api/`, `build.json`, `update-policy.json` or `version.json`, and it ignores
     anything outside its scope.
   - It caches `https://fonts.gstatic.com` on first use. Pass `--runtime-origin` for other https
-    origins.
+    origins, and `--precache <file>` for a build file the app needs offline that the default rules
+    skip (for example `sqlite3mc.wasm`, the encrypted web database of InfraGIS).
 
   `generate` also removes the deprecated Flutter worker registration from `flutter_bootstrap.js`
   and appends `templates/pwa/register.js`, which exposes:

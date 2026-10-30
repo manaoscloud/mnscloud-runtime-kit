@@ -22,6 +22,10 @@ on:
         description: "PWA app id for the service worker cache (default: repository name without mnscloud-)."
         type: string
         default: ""
+      pwa_generate_args:
+        description: "Extra flutter-pwa.py generate arguments (--precache <file>, --runtime-origin <origin>)."
+        type: string
+        default: ""
       web_check:
         description: "Extra command run after the web build (repository-specific web rule)."
         type: string
@@ -98,10 +102,12 @@ jobs:
         if: ${{ inputs.web_mode == 'pwa' }}
         env:
           APP: ${{ inputs.pwa_app || github.event.repository.name }}
+          EXTRA: ${{ inputs.pwa_generate_args }}
         run: |
           set -euo pipefail
           app="${APP#mnscloud-}"
-          python3 .mnscloud-runtime-kit/scripts/flutter-pwa.py generate --build-dir build/web --app "$app"
+          # shellcheck disable=SC2086 # EXTRA is a list of flags
+          python3 .mnscloud-runtime-kit/scripts/flutter-pwa.py generate --build-dir build/web --app "$app" $EXTRA
           python3 .mnscloud-runtime-kit/scripts/flutter-pwa.py validate --build-dir build/web --base-href /
       - name: Repository web check
         if: ${{ inputs.web_check != '' }}
