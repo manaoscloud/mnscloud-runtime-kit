@@ -102,3 +102,48 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(cacheFirst(request));
 });
+
+// Web Push for apps that subscribe through window.mnscloudPwa.subscribePush. The server sends
+// {title, body, url, tag}; the target stays inside the scope. Apps that never subscribe get none.
+function notificationTarget(value) {
+  try {
+    const url = new URL(typeof value === 'string' && value ? value : './', SCOPE);
+    return inScope(url) ? url.href : SCOPE.href;
+  } catch {
+    return SCOPE.href;
+  }
+}
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === 'string' && data.title ? data.title.slice(0, 120) : APP;
+  const options = {
+    body: typeof data.body === 'string' ? data.body.slice(0, 240) : '',
+    icon: new URL('icons/Icon-192.png', SCOPE).href,
+    data: { url: notificationTarget(data.url) },
+  };
+  if (typeof data.tag === 'string' && data.tag) options.tag = data.tag.slice(0, 64);
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// A click focuses an open window of the app and tells it the target (the app decides how to
+// show it, without a reload); with no window open it opens the target.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = notificationTarget(event.notification.data?.url);
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const client = windows.find((item) => inScope(new URL(item.url)));
+    if (client) {
+      await client.focus();
+      client.postMessage({ type: 'MNSCLOUD_PWA_NOTIFICATION_CLICK', url: target });
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
+});

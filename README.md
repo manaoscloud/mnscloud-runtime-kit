@@ -288,6 +288,14 @@ InfraGIS Mobile and new ones). The workspace contract that tells when to use eac
     `unavailable`) and `onInstallChange(listener)`. Chromium browsers fire `beforeinstallprompt`,
     which the script keeps for the button. iOS/iPadOS Safari installs only from Share → Add to
     Home Screen, so on `ios` the app shows those steps.
+  - Web Push, only for an app that asks for it: `pushPermission()` (`unsupported`, `default`,
+    `granted`, `denied`), `subscribePush(vapidPublicKey)` (asks permission; call it from a user
+    action) and `currentPush()` resolve the `PushSubscription` JSON string the app sends to its API,
+    `unsubscribePush()` resolves the removed endpoint, and `onNotificationClick(listener)` receives
+    the target URL when a notification is clicked while the app is open. The worker shows the
+    `{title, body, url, tag}` the server sends (the URL stays inside the scope) and, on a click,
+    focuses the open app or opens the target. iOS/iPadOS deliver Web Push only to the app
+    installed on the home screen (16.4+).
 
   `validate` checks the manifest (relative `id`/`scope`/`start_url`, display, 192/512 and maskable
   icons), `index.html` (base href, manifest link, viewport, theme-color), the worker and the local
