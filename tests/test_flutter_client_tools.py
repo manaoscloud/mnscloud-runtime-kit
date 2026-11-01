@@ -111,7 +111,8 @@ class FlutterPwaTest(unittest.TestCase):
             self.assertIn('_flutter.loader.load()', boot)
             self.assertEqual(boot.count('mnscloud-pwa-register v1'), 1)
             for api in ('applyUpdate', 'persistStorage', 'installState', 'promptInstall',
-                        'onInstallChange', 'beforeinstallprompt'):
+                        'onInstallChange', 'beforeinstallprompt', 'pushPermission', 'subscribePush',
+                        'currentPush', 'unsubscribePush', 'onNotificationClick'):
                 self.assertIn(api, boot)
             self.assertTrue((build / 'flutter_service_worker.js').exists(), 'stub kept for cleanup')
 
@@ -123,6 +124,9 @@ class FlutterPwaTest(unittest.TestCase):
                              'assets/NOTICES', 'canvaskit/skwasm.wasm', 'canvaskit/canvaskit.wasm'):
                 self.assertNotIn(excluded, precache)
             self.assertIn('canvaskit/chromium/canvaskit.wasm', sw)
+            for listener in ("addEventListener('push'", "addEventListener('notificationclick'"):
+                self.assertIn(listener, sw)
+            self.assertIn('return inScope(url) ? url.href : SCOPE.href;', sw)
 
             again = run(PWA, 'generate', '--build-dir', 'build/web', '--app', 'demo', cwd=folder)
             self.assertEqual(again.returncode, 0, again.stderr)
