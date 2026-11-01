@@ -92,6 +92,9 @@ print(json.dumps({
     "artifactSha256": artifact.get("sha256"),
     "artifactSizeBytes": artifact.get("sizeBytes"),
     "artifactContentType": artifact.get("contentType"),
+    # Minimum versions of an installed client (Flutter apps): release-wide and per platform.
+    "minimumVersion": stable.get("minimumVersion"),
+    "platformMinimums": stable.get("platformMinimums"),
 }))
 if os.environ.get("GITHUB_OUTPUT"):
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:

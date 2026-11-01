@@ -252,6 +252,14 @@ InfraGIS Mobile and new ones). The workspace contract that tells when to use eac
   not reach the network or a declared device: `INTERNET` in the main Android manifest,
   `network.client` in both macOS entitlements, extra permissions, entitlements and Info.plist
   keys, and iOS 15 / macOS 12 minimum deployment targets.
+- **Installed client version policy.** `scripts/notify-release-cache.sh` publishes
+  `channels.stable.minimumVersion` and `channels.stable.platformMinimums`
+  (`{"android": "x.y.z", ...}`; `android`, `ios`, `windows`, `macos`, `linux`) of
+  `releases/manifest.json` with the release. The API serves them at
+  `GET /api/v1/public/clients/<app>/policy` and refuses an installed client below the minimum of its
+  platform (426 `CLIENT_VERSION_UNSUPPORTED`); clients send `X-Mns-Client: <product>/<version>` and
+  `X-Mns-Client-Platform`. Raise a platform minimum only after that build is in its store or
+  download.
 - **PWA.** Flutter no longer ships a caching service worker (3.47 writes a self-unregistering
   stub). After `flutter build web --release --base-href / --no-web-resources-cdn`, run:
 
