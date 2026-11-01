@@ -10,13 +10,13 @@ from unittest.mock import patch
 
 
 class ReleaseCommitTest(unittest.TestCase):
-    def payload(self, commit):
+    def payload(self, commit, stable=None):
         script = (Path(__file__).resolve().parents[1] / 'scripts/notify-release-cache.sh').read_text()
         block = script.split("python3 - > \"$payload\" <<'PY'\n", 1)[1].split('\nPY\n', 1)[0]
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             manifest = root / 'manifest.json'
-            manifest.write_text(json.dumps({'product': 'mnscloud-authentication', 'channels': {'stable': {}}}))
+            manifest.write_text(json.dumps({'product': 'mnscloud-authentication', 'channels': {'stable': stable or {}}}))
             original_open = open
             def fixture_open(path, *args, **kwargs):
                 return original_open(manifest if path == 'releases/manifest.json' else path, *args, **kwargs)
@@ -32,6 +32,13 @@ class ReleaseCommitTest(unittest.TestCase):
     def test_publishes_full_tag_commit(self):
         commit = '1234567890abcdef' * 2 + '12345678'
         self.assertEqual(self.payload(commit)['buildRef'], commit)
+
+    def test_publishes_client_minimum_versions(self):
+        commit = '1234567890abcdef' * 2 + '12345678'
+        payload = self.payload(commit, {'minimumVersion': '1.0.0', 'platformMinimums': {'android': '1.0.20'}})
+        self.assertEqual(payload['minimumVersion'], '1.0.0')
+        self.assertEqual(payload['platformMinimums'], {'android': '1.0.20'})
+        self.assertIsNone(self.payload(commit)['platformMinimums'])
 
     def test_web_clients_are_managed_products(self):
         script = (Path(__file__).resolve().parents[1] / 'scripts/notify-release-cache.sh').read_text()
