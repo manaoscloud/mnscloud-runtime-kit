@@ -113,10 +113,41 @@ if [ "$payload_status" -ne 0 ]; then
   exit "$payload_status"
 fi
 base_url="${MNSCLOUD_RELEASE_SYNC_URL%/}"
-if [[ "$base_url" == */api/v1 ]]; then
-  endpoint="${base_url}/runtime/releases/publish"
-else
-  endpoint="${base_url}/api/v1/runtime/releases/publish"
+[[ "$base_url" == */api/v1 ]] || base_url="${base_url}/api/v1"
+endpoint="${base_url}/runtime/releases/publish"
+
+# Private runtime repositories (hosts have no GitHub credential): the API keeps a git bundle of the
+# release tag and hands it to the host's Agent (FA5). Uploaded before the catalog entry, so the
+# runtime update queued by the publication already finds it.
+packaged_products=" mnscloud-dns "
+product="$(python3 -c 'import json; print(json.load(open("releases/manifest.json", encoding="utf-8")).get("product", ""))')"
+if [[ "$packaged_products" == *" ${product} "* ]]; then
+  bundle="$(mktemp)"
+  package="$(mktemp)"
+  trap 'rm -f "$payload" "$bundle" "$package"' EXIT
+  git bundle create "$bundle" "refs/tags/v${RELEASE_VERSION}" 2>/dev/null
+  git bundle verify "$bundle" >/dev/null 2>&1 || { echo "release bundle verification failed" >&2; exit 1; }
+  BUNDLE_PATH="$bundle" PACKAGE_PRODUCT="$product" python3 - > "$package" <<'PY'
+import base64
+import hashlib
+import json
+import os
+
+data = open(os.environ["BUNDLE_PATH"], "rb").read()
+print(json.dumps({
+    "product": os.environ["PACKAGE_PRODUCT"],
+    "version": os.environ["RELEASE_VERSION"],
+    "sha256": hashlib.sha256(data).hexdigest(),
+    "contentType": "application/x-git-bundle",
+    "contentBase64": base64.b64encode(data).decode(),
+}))
+PY
+  curl -fsS -X POST \
+    -H "Authorization: Bearer ${MNSCLOUD_RELEASE_SYNC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data @"$package" \
+    "${base_url}/runtime/releases/packages" > /dev/null
+  echo "Runtime source package of ${product} v${RELEASE_VERSION} uploaded."
 fi
 curl -fsS -X POST \
   -H "Authorization: Bearer ${MNSCLOUD_RELEASE_SYNC_TOKEN}" \
