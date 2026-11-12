@@ -65,6 +65,8 @@ mrtk_install_or_update_deno() {
   CI=1 DENO_INSTALL="$install_dir" sh -c \
     "curl --proto '=https' --tlsv1.2 -fsSL https://deno.land/install.sh | sh -s -- --no-modify-path v${version}"
 
+  # The deno.land installer can leave bin/ as 0700; runtimes running as a service user need it.
+  chmod 0755 "${install_dir}" "${install_dir}/bin" "${install_dir}/bin/deno"
   ln -sfn "${install_dir}/bin/deno" /usr/local/bin/deno
   ln -sfn "${install_dir}/bin/deno" /usr/bin/deno 2>/dev/null || true
 
