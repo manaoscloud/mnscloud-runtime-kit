@@ -27,6 +27,18 @@ boot, `unattended-upgrades`/apt-daily often hold the dpkg or apt lists lock, and
 The wait defaults to 600 seconds; override it with `MNSCLOUD_APT_LOCK_TIMEOUT`. When the
 wait expires, apt-get still runs so its error names the lock holder.
 
+## Retention helper
+
+`lib/retention.sh` defines `mrtk_retention_prune ROOT NAME_REGEX KEEP MIN_AGE_DAYS [--protect NAME]... [--dry-run]`
+for product `scripts/housekeeping.sh` scripts (source `/opt/mnscloud/runtime-kit/lib/retention.sh`).
+Entries are the direct, non-symlink children of the absolute `ROOT` whose name fully matches the
+POSIX ERE `NAME_REGEX`. The newest `KEEP` (>= 1) are always kept; a later entry is removed only when
+its mtime is older than `MIN_AGE_DAYS` and it is not named by `--protect`. `--dry-run` removes
+nothing but reports the same counts. It prints one JSON line on stdout,
+`{"path":"ROOT","kept":N,"removed":M,"freedBytes":B,"dryRun":false}` (plus `"missing":true` when
+`ROOT` does not exist), and returns 2 with a message on stderr for an invalid `ROOT` (relative, `/`,
+symlink), `KEEP` or `MIN_AGE_DAYS`.
+
 ## Boundary
 
 This kit may install shared runtimes such as Nginx, Flutter, Deno, Node.js, Docker, Certbot,
