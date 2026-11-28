@@ -14,5 +14,11 @@ jobs:
       - name: Validate shell syntax
         run: bash -n scripts/*.sh lib/*.sh installers/*.sh
 
+      - name: Lint the retention helper
+        run: shellcheck lib/retention.sh
+
       - name: Validate configuration reconciliation primitives
         run: python3 -m unittest discover -s tests -v
+
+      - name: Validate the retention helper contract
+        run: python3 tests/test_retention.py
